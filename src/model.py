@@ -134,7 +134,7 @@ class torch_RNN_manual(torch_RNN1):
         self.hts = torch.zeros(self.time_steps, x.size(0), self.hidden_size)
         self.hts[0] = h
         # Main RNN loop
-        for t in range(1,self.time_steps):
+        for t in range(0,self.time_steps):
             h = self.act(self.hidden(h) + self.input(x[:,t,:]))
             self.hts[t] = h
         # If outputnn is true, use a linear layer to output the final hidden state
