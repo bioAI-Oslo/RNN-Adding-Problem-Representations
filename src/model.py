@@ -175,6 +175,8 @@ class torch_RNN_full_manual(nn.Module):
 
         self.hidden = torch.nn.Linear(hidden_size,hidden_size,bias=bias)
         self.input = torch.nn.Linear(input_size,hidden_size,bias=bias)
+
+        self.outputnn = outputnn
         self.output = torch.nn.Linear(hidden_size,output_size,bias=bias)
 
         # Initialize IRNN
@@ -199,9 +201,6 @@ class torch_RNN_full_manual(nn.Module):
 
         self.Wh_init = self.hidden.weight.detach().clone()
         self.Wx_init = self.input.weight.detach().clone()
-
-        self.outputnn = outputnn
-        self.output = torch.nn.Linear(hidden_size,output_size)
 
         self.loss_func = torch.nn.MSELoss()
 
@@ -269,3 +268,40 @@ class torch_RNN_full_manual(nn.Module):
         plt.plot(accs)
         plt.title("Accuracy on training data")
         plt.show()
+
+
+class RNN_L2(torch_RNN_full_manual):
+    def __init__(self, input_size,time_steps,output_size,hidden_size, act_decay=0.001, w_decay=0.001, lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False):
+        super().__init__(input_size,time_steps,output_size,hidden_size,lr,irnn,outputnn,bias,Wx_normalize,activation)
+        self.w_decay = w_decay
+        self.act_decay = act_decay
+
+    def loss_fn(self, x, y_hat):
+        y = self(x)
+        # L2 regularization on hts
+        activity_L2 = (self.act_decay*self.hts**2).sum()
+        # (h_t - h_{t-1})^2
+        # activity_L2 = self.act_decay*torch.tensor([((torch.norm(self.hts[i],dim=1)-torch.norm(self.hts[i-1],dim=1))**2).sum() for i in range(1,len(self.hts))],requires_grad=True).sum()
+        output_L2 = (self.w_decay*self.output.weight**2).sum()
+        input_L2 = (self.w_decay*self.input.weight**2).sum()
+        hidden_L2 = (self.w_decay*self.hidden.weight**2).sum()
+        loss = self.loss_func(y,y_hat) + activity_L2 + output_L2 + input_L2 + hidden_L2
+        return loss
+    
+    def forward(self, x):
+        # h = self.input(x[:,0,:])
+        h = torch.zeros(1, x.size(0), self.hidden_size)
+        self.hts = torch.zeros(self.time_steps, x.size(0), self.hidden_size)
+        self.hts[0] = h
+        # Main RNN loop
+        for t in range(0,self.time_steps):
+            h = self.act(self.hidden(h) + self.input(x[:,t,:]))
+            self.hts[t] = h
+        # If outputnn is true, use a linear layer to output the final hidden state
+        if self.outputnn:
+            return torch.sigmoid(self.output(h).squeeze())
+        # Else, output the "raw" final hidden state
+        elif self.hidden_size == 1:
+            return h.squeeze()
+        else:
+            return torch.norm(h.squeeze(),dim=-1)
