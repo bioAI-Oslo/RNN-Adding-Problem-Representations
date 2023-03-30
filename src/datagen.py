@@ -76,6 +76,7 @@ def datagen_circular(n_data,t_steps):
     for i in range(n_data):
         # Rayleigh distribution for the random numbers to sum, scale=1
         data[i] = torch.tensor(np.random.rayleigh(0.1, t_steps))
+        # data[i][0] = 0
         data[i] = data[i]/sum(data[i])
     # Necessary to fit into nn model
     data = data.unsqueeze(2)
