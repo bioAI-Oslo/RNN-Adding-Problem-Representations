@@ -171,7 +171,7 @@ class torch_RNN_timewise(torch_RNN1):
 
 
 class torch_RNN_full_manual(nn.Module):
-    def __init__(self, input_size,time_steps,output_size,hidden_size,lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False):
+    def __init__(self, input_size,time_steps,output_size,hidden_size,lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False,batch_size=64):
         super().__init__()
         self.input_size = input_size
         self.time_steps = time_steps
@@ -188,7 +188,7 @@ class torch_RNN_full_manual(nn.Module):
         self.hts_bias = torch.nn.Parameter(torch.zeros(self.time_steps+1, self.hidden_size),requires_grad=True)
         self.h0 = torch.nn.Parameter(torch.ones(1, self.hidden_size)/np.sqrt(self.hidden_size),requires_grad=True)
 
-        self.batch_size = 64
+        self.batch_size = batch_size
 
         # Initialize IRNN
         self.activation = activation
@@ -249,10 +249,12 @@ class torch_RNN_full_manual(nn.Module):
         self.optimizer.zero_grad(set_to_none=True)
         loss = self.loss_fn(x, y_hat)
         loss.backward()
+
+        # torch.nn.utils.clip_grad_norm_(self.parameters(), 1000)
         self.optimizer.step()
         return loss.item()
 
-    def train(self, loader, epochs=100):
+    def train(self, epochs=100, loader=None):
         for epoch in tqdm(range(epochs)):
             data,labels = datagen_circular(self.batch_size,self.time_steps)
             loss = self.train_step(data,labels)
@@ -320,7 +322,8 @@ class RNN_L2(torch_RNN_full_manual):
         else:
             return torch.norm(h.squeeze(),dim=-1)
         
-class RNN_circular(torch_RNN_full_manual):
+class RNN_circular_2D(torch_RNN_full_manual):
+    # RNN that trains to output the angle of a circular trajectory in the first two dimensions depending on size of input
     def __init__(self, input_size,time_steps,output_size,hidden_size, act_decay=0.001, w_decay=0.001, lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False, rotation_init=False):
         super().__init__(input_size,time_steps,output_size,hidden_size,lr,irnn,outputnn,bias,Wx_normalize,activation)
         self.w_decay = w_decay
@@ -332,8 +335,6 @@ class RNN_circular(torch_RNN_full_manual):
         self.losses_norm = []
 
     def forward(self, x):
-        # h = torch.zeros(1, x.size(0), self.hidden_size)
-        # h[:,:,0] = 1
         # Make h0 trainable
         h =  self.h0.unsqueeze(1).repeat(1,x.size(0),1)
         # time_steps+1 because we want to include the initial hidden state
@@ -351,17 +352,10 @@ class RNN_circular(torch_RNN_full_manual):
             self.hts = self.hts - self.hts_bias.unsqueeze(1)
             # Use remainder to make sure angles are between 0 and 2pi. Note this is only for the first TWO dimensions, and for hdims > 2, this will not be a general angle
             return torch.remainder(torch.atan2(self.hts[1:,:,1],self.hts[1:,:,0]),2*np.pi).T
-            # Angle between ht and x-axis
-            # return torch.remainder(torch.acos(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1)),2*np.pi).T
-            # return torch.atan2(self.hts[:,:,1],self.hts[:,:,0]).T
 
     def loss_fn(self, x, y_hat):
         y = self(x)
-
-        # Angles of the hs
-        # angles = torch.atan2(y[:,:,1],y[:,:,0])
         # L2 regularization on norm of hs
-        # activity_L2 = (self.act_decay*torch.norm(self.hts,dim=-1)**2).sum()
         # norm of hs at each time step regularized around 1
         activity_L2 = self.act_decay*((torch.norm(self.hts,dim=-1)-1)**2).sum()
         # angle_loss = self.loss_func(y,y_hat)
@@ -369,12 +363,85 @@ class RNN_circular(torch_RNN_full_manual):
         # Loss for equating 0 and 2pi
         angle_loss = ((torch.abs(torch.sin(y)-torch.sin(y_hat)) + torch.abs(torch.cos(y)-torch.cos(y_hat)))**2).mean()
 
-        # output_L2 = (self.w_decay*self.output.weight**2).sum()
-        # input_L2 = (self.w_decay*self.input.weight**2).sum()
-        # hidden_L2 = (self.w_decay*self.hidden.weight**2).sum()
         self.losses.append(angle_loss.item())
         self.losses_norm.append(activity_L2.item())
         loss = angle_loss + activity_L2 #+ hidden_L2
+        return loss
+    
+    def plot_losses(self,average=None):
+        losses = np.array(self.losses)
+        losses_norm = np.array(self.losses_norm)
+        if average == None:
+            plt.plot(losses[10:],label="Angle Loss")
+            plt.plot(losses_norm[10:], label="Activity norm Loss")
+            plt.plot(losses[10:]+losses_norm[10:], label="Total Loss")
+        else:
+            if len(losses)%average != 0:
+                losses = losses[:-(len(losses)%average)]
+                losses_norm = losses_norm[:-(len(losses_norm)%average)]
+                print("Losses array was not a multiple of average. Truncated to",len(losses))
+            loss_data_avgd = losses.reshape(average,-1).mean(axis=1)
+            loss_data_norm_avgd = losses_norm.reshape(average,-1).mean(axis=1)
+            plt.plot(loss_data_avgd[3:], label="Angle Loss")
+            plt.plot(loss_data_norm_avgd[3:], label="Activity norm Loss")
+            plt.plot(loss_data_avgd[3:]+loss_data_norm_avgd[3:], label="Total Loss")
+        plt.legend()
+        plt.title("MSE Losses")
+        plt.show()
+
+
+class RNN_circular_ND(torch_RNN_full_manual):
+    # RNN that trains to output the angle of a circular trajectory in any dimension depending on size of input
+    def __init__(self, input_size,time_steps,output_size,hidden_size, act_decay=0.001, w_decay=0.001, lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False, rotation_init=False):
+        super().__init__(input_size,time_steps,output_size,hidden_size,lr,irnn,outputnn,bias,Wx_normalize,activation)
+        self.w_decay = w_decay
+        self.act_decay = act_decay
+        if rotation_init:
+            # self.hidden.weight = torch.nn.Parameter(torch.tensor([[0,1],[-1,0]],dtype=torch.float32),requires_grad=True)
+            self.hidden.weight = torch.nn.Parameter(torch.tensor([[np.cos(2*np.pi/20),-np.sin(2*np.pi/20)],[np.sin(2*np.pi/20),np.cos(2*np.pi/20)]],dtype=torch.float32),requires_grad=True)
+
+        self.losses_norm = []
+
+    def forward(self, x):
+        # Make h0 trainable
+        h =  self.h0.unsqueeze(1).repeat(1,x.size(0),1)
+        # time_steps+1 because we want to include the initial hidden state
+        self.hts = torch.zeros(self.time_steps+1, x.size(0), self.hidden_size)
+        self.hts[0] = h
+        # Main RNN loop
+        for t in range(0,self.time_steps):
+            h = self.act(self.hidden(h) + self.input(x[:,t,:]))
+            self.hts[t+1] = h
+        # If outputnn is true, use a linear layer to output the hs
+        if self.outputnn:
+            return self.output(self.hts)
+        # Else, output all the angles of the hs
+        else:
+            self.hts = self.hts - self.hts_bias.unsqueeze(1)
+            # Use remainder to make sure angles are between 0 and 2pi. Note this is only for the first TWO dimensions, and for hdims > 2, this will not be a general angle
+            # return torch.remainder(torch.atan2(self.hts[1:,:,1],self.hts[1:,:,0]),2*np.pi).T
+
+            # Angle between ht and x-axis (first dimension axis)
+            # Check if returns NaN before returning
+            if torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T.isnan().any():
+                print("NaN in angle")   
+            return torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T
+            # return torch.atan2(self.hts[:,:,1],self.hts[:,:,0]).T
+
+    def loss_fn(self, x, y_hat):
+        y = self(x)
+        # L2 regularization on norm of hs
+        # norm of hs at each time step regularized around 1
+        activity_L2 = self.act_decay*((torch.norm(self.hts,dim=-1)-1)**2).sum()
+
+        # Transform y_hat to be between 0 and pi
+        y_hat = np.pi - torch.abs(y_hat - np.pi)
+
+        angle_loss = self.loss_func(y,y_hat)
+
+        self.losses.append(angle_loss.item())
+        self.losses_norm.append(activity_L2.item())
+        loss = angle_loss + activity_L2
         return loss
     
     def plot_losses(self,average=None):
