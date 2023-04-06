@@ -86,5 +86,5 @@ def datagen_circular(n_data,t_steps):
         for j in range(t_steps):
             # Map sums 0 to 1 to angles 0 to 2pi
             labels[i,j] = 2*np.pi*torch.sum(data[i,:j+1])
-    # labels[:,-1] = 0
+    # labels[:,0] = 0
     return data,labels

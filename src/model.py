@@ -250,8 +250,10 @@ class torch_RNN_full_manual(nn.Module):
         loss = self.loss_fn(x, y_hat)
         loss.backward()
 
-        # torch.nn.utils.clip_grad_norm_(self.parameters(), 1000)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
         self.optimizer.step()
+        # Print weight gradient norms
+        # print("Hidden weight grad norm:",torch.norm(self.hidden.weight.grad))
         return loss.item()
 
     def train(self, epochs=100, loader=None):
@@ -402,6 +404,8 @@ class RNN_circular_ND(torch_RNN_full_manual):
 
         self.losses_norm = []
 
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
+
     def forward(self, x):
         # Make h0 trainable
         h =  self.h0.unsqueeze(1).repeat(1,x.size(0),1)
@@ -417,27 +421,54 @@ class RNN_circular_ND(torch_RNN_full_manual):
             return self.output(self.hts)
         # Else, output all the angles of the hs
         else:
-            self.hts = self.hts - self.hts_bias.unsqueeze(1)
+            self.hts = self.hts #- self.hts_bias.unsqueeze(1)
             # Use remainder to make sure angles are between 0 and 2pi. Note this is only for the first TWO dimensions, and for hdims > 2, this will not be a general angle
             # return torch.remainder(torch.atan2(self.hts[1:,:,1],self.hts[1:,:,0]),2*np.pi).T
 
             # Angle between ht and x-axis (first dimension axis)
             # Check if returns NaN before returning
             if torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T.isnan().any():
-                print("NaN in angle")   
-            return torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T
+                # print("NaN in angle")
+                pass
+
+            return self.hts
+            # return torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T
             # return torch.atan2(self.hts[:,:,1],self.hts[:,:,0]).T
 
     def loss_fn(self, x, y_hat):
         y = self(x)
+        y = y.permute(1,0,2)
         # L2 regularization on norm of hs
-        # norm of hs at each time step regularized around 1
-        activity_L2 = self.act_decay*((torch.norm(self.hts,dim=-1)-1)**2).sum()
+        # norm of hts at each time step regularized to be 1
+        activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
+        
 
-        # Transform y_hat to be between 0 and pi
-        y_hat = np.pi - torch.abs(y_hat - np.pi)
+        # Angle loss
+        # Concatenate 0 to y_hat to make it the same size as y
+        y_hat = torch.cat((torch.zeros(y_hat.size(0),1),y_hat),dim=1)
+        angle_loss = 0
 
-        angle_loss = self.loss_func(y,y_hat)
+        for i in range(1,self.time_steps):
+            # Iterate through 1 to i followed up to time_steps//2 minus 10% of time_steps as explained in obsidian notes
+            for j in range(1,min(self.time_steps//2-int(self.time_steps*0.1),i)+1):
+                # Check angles between hts at time i and i-j
+                # angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)),-1.0,1.0)))
+                normalizer = 1/torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)
+                # Check if y has any NaNs
+                if y.isnan().any():
+                    print("y has NaNs")
+                # Check if normalizer has any 0s
+                if normalizer.isnan().any():
+                    print("normalizer has NaNs")
+                angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)*normalizer,-1.0,1.0)))
+                # Check if angle_test has any NaNs
+                if angle_test.isnan().any():
+                    print("angle_test has NaNs")
+                angle_theoretical = (y_hat[i]-y_hat[i-j])
+                angle_loss += torch.mean((angle_test-angle_theoretical)**2)
+
+        # Mean the angle loss over the batch and time steps
+        angle_loss = angle_loss/x.size(0)
 
         self.losses.append(angle_loss.item())
         self.losses_norm.append(activity_L2.item())
