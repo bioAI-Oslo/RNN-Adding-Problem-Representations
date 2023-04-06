@@ -247,10 +247,9 @@ class torch_RNN_full_manual(nn.Module):
 
     def train_step(self, x, y_hat):
         self.optimizer.zero_grad(set_to_none=True)
+        # Backward hook to clip gradients
         loss = self.loss_fn(x, y_hat)
         loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
         self.optimizer.step()
         # Print weight gradient norms
         # print("Hidden weight grad norm:",torch.norm(self.hidden.weight.grad))
@@ -453,14 +452,14 @@ class RNN_circular_ND(torch_RNN_full_manual):
             for j in range(1,min(self.time_steps//2-int(self.time_steps*0.1),i)+1):
                 # Check angles between hts at time i and i-j
                 # angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)),-1.0,1.0)))
-                normalizer = 1/torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)
+                normalizer = 1/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1))
                 # Check if y has any NaNs
                 if y.isnan().any():
                     print("y has NaNs")
                 # Check if normalizer has any 0s
                 if normalizer.isnan().any():
                     print("normalizer has NaNs")
-                angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)*normalizer,-1.0,1.0)))
+                angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)*normalizer,-0.95,0.95)))
                 # Check if angle_test has any NaNs
                 if angle_test.isnan().any():
                     print("angle_test has NaNs")
