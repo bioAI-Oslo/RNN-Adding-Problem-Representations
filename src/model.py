@@ -402,6 +402,7 @@ class RNN_circular_ND(torch_RNN_full_manual):
             self.hidden.weight = torch.nn.Parameter(torch.tensor([[np.cos(2*np.pi/20),-np.sin(2*np.pi/20)],[np.sin(2*np.pi/20),np.cos(2*np.pi/20)]],dtype=torch.float32),requires_grad=True)
 
         self.losses_norm = []
+        self.losses_circle = []
 
         torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
 
@@ -409,7 +410,8 @@ class RNN_circular_ND(torch_RNN_full_manual):
         # Make h0 trainable
         h =  self.h0.unsqueeze(1).repeat(1,x.size(0),1)
         # time_steps+1 because we want to include the initial hidden state
-        self.hts = torch.zeros(self.time_steps+1, x.size(0), self.hidden_size)
+        batch_size = x.size(0)
+        self.hts = torch.zeros(self.time_steps+1, batch_size, self.hidden_size)
         self.hts[0] = h
         # Main RNN loop
         for t in range(0,self.time_steps):
@@ -436,7 +438,7 @@ class RNN_circular_ND(torch_RNN_full_manual):
 
     def loss_fn(self, x, y_hat):
         y = self(x)
-        y = y.permute(1,0,2)
+        # y = y.permute(1,0,2)
         # L2 regularization on norm of hs
         # norm of hts at each time step regularized to be 1
         activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
@@ -445,52 +447,77 @@ class RNN_circular_ND(torch_RNN_full_manual):
         # Angle loss
         # Concatenate 0 to y_hat to make it the same size as y
         y_hat = torch.cat((torch.zeros(y_hat.size(0),1),y_hat),dim=1)
-        angle_loss = 0
+        # Permute y_hat to make it the same size as y
+        y_hat = y_hat.permute(1,0)
+        # angle_loss = 0
 
-        for i in range(1,self.time_steps):
-            # Iterate through 1 to i followed up to time_steps//2 minus 10% of time_steps as explained in obsidian notes
-            for j in range(1,min(self.time_steps//2-int(self.time_steps*0.1),i)+1):
-                # Check angles between hts at time i and i-j
-                # angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)),-1.0,1.0)))
-                normalizer = 1/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1))
-                # Check if y has any NaNs
-                if y.isnan().any():
-                    print("y has NaNs")
-                # Check if normalizer has any 0s
-                if normalizer.isnan().any():
-                    print("normalizer has NaNs")
-                angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)*normalizer,-0.95,0.95)))
-                # Check if angle_test has any NaNs
-                if angle_test.isnan().any():
-                    print("angle_test has NaNs")
-                angle_theoretical = (y_hat[i]-y_hat[i-j])
-                angle_loss += torch.mean((angle_test-angle_theoretical)**2)
+        # for i in range(1,self.time_steps):
+        #     # Iterate through 1 to i followed up to time_steps//2 minus 10% of time_steps as explained in obsidian notes
+        #     for j in range(1,min(self.time_steps//2-int(self.time_steps*0.1),i)+1):
+        #         # print(y.shape,y_hat.shape)
+        #         # Check angles between hts at time i and i-j
+        #         # angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1)),-1.0,1.0)))
+        #         normalizer = 1/(torch.norm(y[i],dim=-1)*torch.norm(y[i-j],dim=-1))
+        #         # Check if y has any NaNs
+        #         # if y.isnan().any():
+        #         #     print("y has NaNs")
+        #         # Check if normalizer has any 0s
+        #         # if normalizer.isnan().any():
+        #         #     print("normalizer has NaNs")
+        #         angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j],dim=-1)*normalizer,-0.9999,0.9999)))
+        #         # Check if angle_test has any NaNs
+        #         # if angle_test.isnan().any():
+        #         #     print("angle_test has NaNs")
+        #         angle_theoretical = (y_hat[i]-y_hat[i-j])
+        #         angle_loss += torch.mean((angle_test-angle_theoretical)**2)
+
+        
+        i = torch.arange(1, self.time_steps).unsqueeze(1)
+        j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
+        mask = (i >= j).float()
+        j = j * mask
+        # Convert i and j to int
+        i = i.long()
+        j = j.long()
+        normalizer = 1 / (torch.norm(y[i], dim=-1) * torch.norm(y[i-j], dim=-1))
+        angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j], dim=-1) * normalizer, -0.9999, 0.9999)))
+        angle_theoretical = (y_hat[i]-y_hat[i-j])
+        angle_loss = torch.mean((angle_test-angle_theoretical)**2)
+
+        # Loss to end in the same position as the start
+        circle_end_loss = 0.0001*torch.mean((y[-1]-y[0])**2)
 
         # Mean the angle loss over the batch and time steps
-        angle_loss = angle_loss/x.size(0)
+        # angle_loss = angle_loss/x.size(0)
 
         self.losses.append(angle_loss.item())
         self.losses_norm.append(activity_L2.item())
-        loss = angle_loss + activity_L2
+        self.losses_circle.append(circle_end_loss.item())
+        loss = angle_loss + activity_L2 + circle_end_loss
         return loss
     
     def plot_losses(self,average=None):
         losses = np.array(self.losses)
         losses_norm = np.array(self.losses_norm)
+        losses_circle = np.array(self.losses_circle)
         if average == None:
             plt.plot(losses[10:],label="Angle Loss")
             plt.plot(losses_norm[10:], label="Activity norm Loss")
-            plt.plot(losses[10:]+losses_norm[10:], label="Total Loss")
+            plt.plot(losses_circle[10:], label="Circle End Loss")
+            plt.plot(losses[10:]+losses_norm[10:]+losses_circle[10:], label="Total Loss")
         else:
             if len(losses)%average != 0:
                 losses = losses[:-(len(losses)%average)]
                 losses_norm = losses_norm[:-(len(losses_norm)%average)]
+                losses_circle = losses_circle[:-(len(losses_circle)%average)]
                 print("Losses array was not a multiple of average. Truncated to",len(losses))
             loss_data_avgd = losses.reshape(average,-1).mean(axis=1)
             loss_data_norm_avgd = losses_norm.reshape(average,-1).mean(axis=1)
+            loss_data_circle_avgd = losses_circle.reshape(average,-1).mean(axis=1)
             plt.plot(loss_data_avgd[3:], label="Angle Loss")
             plt.plot(loss_data_norm_avgd[3:], label="Activity norm Loss")
-            plt.plot(loss_data_avgd[3:]+loss_data_norm_avgd[3:], label="Total Loss")
+            plt.plot(loss_data_circle_avgd[3:], label="Circle End Loss")
+            plt.plot(loss_data_avgd[3:]+loss_data_norm_avgd[3:]+loss_data_circle_avgd[3:], label="Total Loss")
         plt.legend()
         plt.title("MSE Losses")
         plt.show()
