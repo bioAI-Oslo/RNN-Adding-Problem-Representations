@@ -88,3 +88,19 @@ def datagen_circular(n_data,t_steps):
             labels[i,j] = 2*np.pi*torch.sum(data[i,:j+1])
     # labels[:,0] = 0
     return data,labels
+
+def datagen_circular_pm(n_data,t_steps,bound=0.5):
+    # Data for adding/subtracting problem mapped to a circle, no masks, positive and negative values drawn from Gauss distribution
+    data = torch.zeros((n_data, t_steps))
+    labels = torch.zeros((n_data, t_steps))
+    for i in range(n_data):
+        for j in range(t_steps):
+            data[i,j] = torch.empty(1).normal_(0,0.1)
+            while torch.sum(data[i,:j+1]) > bound or torch.sum(data[i,:j+1]) < -bound:
+                data[i,j] = torch.empty(1).normal_(0,0.1)
+            labels[i,j] = torch.sum(data[i,:j+1])
+    # Necessary to fit into nn model
+    data = data.unsqueeze(2)
+    # Map labels to angles
+    labels = (labels)*2*np.pi/(2*bound) + np.pi
+    return data,labels
