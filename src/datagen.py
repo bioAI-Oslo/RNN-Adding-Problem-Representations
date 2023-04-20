@@ -73,6 +73,7 @@ def datagen_timewise_labels(n_data,t_steps,n_masks):
 def datagen_circular(n_data,t_steps):
     # Data for adding problem mapped to a circle, no masks, rayleigh distribution
     data = torch.zeros((n_data, t_steps))
+    # VECTORIZE THIS
     for i in range(n_data):
         # Rayleigh distribution for the random numbers to sum, scale=1
         data[i] = torch.tensor(np.random.rayleigh(0.1, t_steps))
@@ -91,16 +92,30 @@ def datagen_circular(n_data,t_steps):
 
 def datagen_circular_pm(n_data,t_steps,bound=0.5):
     # Data for adding/subtracting problem mapped to a circle, no masks, positive and negative values drawn from Gauss distribution
-    data = torch.zeros((n_data, t_steps))
-    labels = torch.zeros((n_data, t_steps))
-    for i in range(n_data):
-        for j in range(t_steps):
-            data[i,j] = torch.empty(1).normal_(0,0.1)
-            while torch.sum(data[i,:j+1]) > bound or torch.sum(data[i,:j+1]) < -bound:
-                data[i,j] = torch.empty(1).normal_(0,0.1)
-            labels[i,j] = torch.sum(data[i,:j+1])
+    # data = torch.zeros((n_data, t_steps))
+    # labels = torch.zeros((n_data, t_steps))
+    # for i in range(n_data):
+    #     for j in range(t_steps):
+    #         # Draw random number from Gauss distribution to add/subtract to sum
+    #         data[i,j] = torch.empty(1).normal_(0,0.1)
+    #         while torch.sum(data[i,:j+1]) > bound or torch.sum(data[i,:j+1]) < -bound:
+    #             # If sum is outside of bounds, draw new number
+    #             data[i,j] = torch.empty(1).normal_(0,0.1)
+    #         # Timewise labels are the sums
+    #         labels[i,j] = torch.sum(data[i,:j+1])
+    # Set up data and labels tensors
+    data = torch.randn((n_data, t_steps)) * 0.1
+    cumsum = torch.cumsum(data, dim=1)
+    mask = (cumsum > bound) | (cumsum < -bound)
+    while mask.any():
+        data[mask] = torch.randn((mask.sum(),)) * 0.1
+        cumsum = torch.cumsum(data, dim=1)
+        mask = (cumsum > bound) | (cumsum < -bound)
+    labels = cumsum
+
+
     # Necessary to fit into nn model
     data = data.unsqueeze(2)
-    # Map labels to angles
+    # Map labels to angles 0 to 2pi
     labels = (labels)*2*np.pi/(2*bound) + np.pi
     return data,labels
