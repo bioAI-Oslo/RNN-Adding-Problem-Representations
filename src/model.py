@@ -185,7 +185,8 @@ class torch_RNN_full_manual(nn.Module):
         self.output = torch.nn.Linear(hidden_size,output_size,bias=bias)
 
         # Make a trainable bias for the hts to potentially move the center of the circle
-        self.hts_bias = torch.nn.Parameter(torch.zeros(self.time_steps+1, self.hidden_size),requires_grad=True)
+        # self.hts_bias = torch.nn.Parameter(torch.zeros(self.time_steps+1, self.hidden_size),requires_grad=True)
+        self.hts_bias = torch.nn.Parameter(torch.zeros(self.hidden_size),requires_grad=True)
         # Make a trainable starting hidden state / starting points of the circle
         self.h0 = torch.nn.Parameter(torch.ones(1, self.hidden_size)/np.sqrt(self.hidden_size),requires_grad=True)
 
@@ -540,6 +541,7 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
     def forward(self, x):
         # Make h0 trainable
         h =  self.h0.unsqueeze(1).repeat(1,x.size(0),1)
+        self.time_steps = x.size(1)
         # time_steps+1 because we want to include the initial hidden state
         batch_size = x.size(0)
         self.hts = torch.zeros(self.time_steps+1, batch_size, self.hidden_size)
@@ -554,7 +556,7 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
         # Else, output all the angles of the hs
         else:
             # Bias to potentially move the center of the circle
-            self.hts = self.hts - self.hts_bias.unsqueeze(1)
+            self.hts = self.hts - self.hts_bias.unsqueeze(0).unsqueeze(0)
 
             # Check if returns NaN before returning
             if torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T.isnan().any():
