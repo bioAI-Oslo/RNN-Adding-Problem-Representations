@@ -553,15 +553,15 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
         # If outputnn is true, use a linear layer to output the hs
         if self.outputnn:
             return self.output(self.hts)
-        # Else, output all the angles of the hs
+        # Else, output all hts
         else:
             # Bias to potentially move the center of the circle
             self.hts = self.hts - self.hts_bias.unsqueeze(0).unsqueeze(0)
 
             # Check if returns NaN before returning
-            if torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T.isnan().any():
+            # if torch.acos(torch.clamp(self.hts[1:,:,0]/torch.norm(self.hts[1:,:,:],dim=-1),-1.0,1.0)).T.isnan().any():
                 # print("NaN in angle")
-                pass
+                # pass
 
             return self.hts
 
@@ -578,10 +578,10 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
         y_hat = y_hat.permute(1,0)
         # angle_loss = 0
         
-        # Main angle loss loop
+        # Main angle loss loop, checks difference in angles for multiple time steps back in time
         i = torch.arange(1, self.time_steps).unsqueeze(1)
         j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
-        # THIS IS VERY UNCERTAIN, TRY ALSO >=
+        # THIS IS VERY UNCERTAIN, TRY ALSO >= (BUT I THINK IT SHOULD BE >)
         mask = (i > j).float()
         j = j * mask
         # Convert i and j to int
@@ -591,7 +591,9 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
         # Cant clamp between -1 and 1 because it will cause NaNs in training
         angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j], dim=-1) * normalizer, -0.9999999, 0.9999999)))
         # Must use torch.abs because the angle can be negative, but the angle_test only returns positive angles
-        angle_theoretical = torch.abs(y_hat[i]-y_hat[i-j])
+        # angle_theoretical = torch.abs(y_hat[i]-y_hat[i-j])
+        # Make 0 and 2pi the same angle
+        angle_theoretical = torch.min(torch.remainder(2*np.pi-(y_hat[i]-y_hat[i-j]),2*np.pi),torch.remainder(2*np.pi-(y_hat[i-j]-y_hat[i]),2*np.pi))
         angle_loss = torch.mean((angle_test-angle_theoretical)**2)
 
         # Loss to end in the same position as the start
@@ -605,7 +607,7 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
     
     def train(self, epochs=100, loader=None):
         for epoch in tqdm(range(epochs)):
-            data,labels = datagen_circular_pm(self.batch_size,self.time_steps)
+            data,labels = datagen_truecircular_pm(self.batch_size,self.time_steps)
             loss = self.train_step(data,labels)
             # for i,(inputs,labels) in enumerate(loader):
             #     loss = self.train_step(inputs,labels)
