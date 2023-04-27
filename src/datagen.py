@@ -150,3 +150,13 @@ def datagen_fakecircular_pm(n_data,t_steps,bound=0.5):
     labels = (labels)*2*np.pi/(2*bound) + np.pi
     return data,labels
     
+def datagen_lowetal(n_data,t_steps):
+    theta_mean = torch.randn((n_data,1)) * 0.1
+    theta = torch.randn((n_data,t_steps)) * 0.3
+    dtheta = theta_mean + theta
+    labels = torch.zeros((n_data,t_steps,2))
+    labels[:,:,1] = torch.cos(dtheta)
+    labels[:,:,0] = torch.sin(dtheta)
+    # Necessary to fit into nn model
+    dtheta = dtheta.unsqueeze(2)
+    return dtheta, labels
