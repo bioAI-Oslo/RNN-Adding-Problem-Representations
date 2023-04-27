@@ -112,10 +112,41 @@ def datagen_circular_pm(n_data,t_steps,bound=0.5):
         cumsum = torch.cumsum(data, dim=1)
         mask = (cumsum > bound) | (cumsum < -bound)
     labels = cumsum
-
-
     # Necessary to fit into nn model
     data = data.unsqueeze(2)
     # Map labels to angles 0 to 2pi
     labels = (labels)*2*np.pi/(2*bound) + np.pi
     return data,labels
+
+def datagen_truecircular_pm(n_data,t_steps,bound=0.5):
+    # # Data for adding/subtracting problem mapped to a circle, positive and negative values drawn from Gauss distribution, if reach bound map to other side of circle
+    # data = torch.zeros((n_data, t_steps))
+    # labels = torch.zeros((n_data, t_steps))
+    # for i in range(n_data):
+    #     for j in range(t_steps):
+    #         # Draw random number from Gauss distribution to add/subtract to sum
+    #         data[i,j] = torch.empty(1).normal_(0,0.1)
+    #         # Timewise labels are the sums modulo (-bound,bound)
+    #         labels[i,j] =(torch.sum(data[i,:j+1])+bound)%(2*bound) - bound
+
+    data = torch.randn((n_data, t_steps)) * 0.1
+    cumulative_sum = torch.cumsum(data, dim=1)
+    labels = torch.remainder(cumulative_sum + bound, 2 * bound) - bound
+    # Necessary to fit into nn model
+    data = data.unsqueeze(2)
+    # Map labels to angles 0 to 2pi
+    labels = (labels)*2*np.pi/(2*bound) + np.pi
+    return data,labels
+
+def datagen_fakecircular_pm(n_data,t_steps,bound=0.5):
+    # Data for adding/subtracting problem mapped to a circle, positive and negative values drawn from Gauss distribution, 
+    # simple cumsum because we only care about difference in angles, use bound only to scale the angles
+    data = torch.randn((n_data, t_steps)) * 0.1
+    cumulative_sum = torch.cumsum(data, dim=1)
+    labels = cumulative_sum
+    # Necessary to fit into nn model
+    data = data.unsqueeze(2)
+    # Map labels to angles 0 to 2pi
+    labels = (labels)*2*np.pi/(2*bound) + np.pi
+    return data,labels
+    
