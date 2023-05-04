@@ -120,6 +120,7 @@ def datagen_circular_pm(n_data,t_steps,bound=0.5):
 
 def datagen_truecircular_pm(n_data,t_steps,bound=0.5):
     # # Data for adding/subtracting problem mapped to a circle, positive and negative values drawn from Gauss distribution, if reach bound map to other side of circle
+
     # data = torch.zeros((n_data, t_steps))
     # labels = torch.zeros((n_data, t_steps))
     # for i in range(n_data):
@@ -154,9 +155,11 @@ def datagen_lowetal(n_data,t_steps):
     theta_mean = torch.randn((n_data,1)) * 0.1
     theta = torch.randn((n_data,t_steps)) * 0.3
     dtheta = theta_mean + theta
+    path_integrated = torch.cumsum(dtheta, dim=1)
     labels = torch.zeros((n_data,t_steps,2))
-    labels[:,:,1] = torch.cos(dtheta)
-    labels[:,:,0] = torch.sin(dtheta)
+    labels[:,:,1] = torch.cos(path_integrated)
+    labels[:,:,0] = torch.sin(path_integrated)
     # Necessary to fit into nn model
-    dtheta = dtheta.unsqueeze(2)
-    return dtheta, labels
+    data = dtheta.unsqueeze(2)
+    path_integrated_bounded = torch.remainder(path_integrated, 2*np.pi) # For use in analysis
+    return data, labels, path_integrated_bounded
