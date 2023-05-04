@@ -733,7 +733,7 @@ class RNN_circular_LowEtAl(nn.Module):
 
     def train(self, epochs=100, loader=None):
         for epoch in tqdm(range(epochs)):
-            data,labels = datagen_lowetal(self.batch_size,self.base_training_tsteps)
+            data,labels, _ = datagen_lowetal(self.batch_size,self.base_training_tsteps)
             loss = self.train_step(data,labels)
         return self.losses
     
@@ -743,9 +743,10 @@ class RNN_circular_LowEtAl(nn.Module):
         for epoch in tqdm(range(epochs)):
             if i%50 == 0:
                 training_steps += 1
-            data,labels = datagen_lowetal(self.batch_size,training_steps)
+            data,labels,_ = datagen_lowetal(self.batch_size,training_steps)
             loss = self.train_step(data,labels)
             i+=1
+        print("Last training time steps:",training_steps)
         return self.losses
     
     def plot_losses(self,average=None):
