@@ -169,7 +169,6 @@ class torch_RNN_timewise(torch_RNN1):
         return loss
     
 
-
 class torch_RNN_full_manual(nn.Module):
     def __init__(self, input_size,time_steps,output_size,hidden_size,lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False,batch_size=64):
         super().__init__()
@@ -327,7 +326,8 @@ class RNN_L2(torch_RNN_full_manual):
             return h.squeeze()
         else:
             return torch.norm(h.squeeze(),dim=-1)
-        
+
+
 class RNN_circular_2D(torch_RNN_full_manual):
     # RNN that trains to output the angle of a circular trajectory in the first two dimensions depending on size of input, uses atan2 instead of arccos in ND case
     def __init__(self, input_size,time_steps,output_size,hidden_size, act_decay=0.001, w_decay=0.001, lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False, rotation_init=False):
@@ -638,9 +638,8 @@ class RNN_circular_ND_pm(torch_RNN_full_manual):
         plt.show()
 
 
-
 class RNN_circular_LowEtAl(nn.Module):
-    def __init__(self,input_size,hidden_size,lr=0.001,irnn=False,outputnn=False,bias=False,Wx_normalize=False,activation=False,batch_size=64,nav_space=1):
+    def __init__(self,input_size,hidden_size,lr=0.001,irnn=True,outputnn=True,bias=True,Wx_normalize=False,activation=True,batch_size=64,nav_space=1):
         super().__init__()
         self.input_size = input_size
         # self.time_steps = time_steps
@@ -768,3 +767,29 @@ class RNN_circular_LowEtAl(nn.Module):
         plt.plot(accs)
         plt.title("Accuracy on training data")
         plt.show()
+
+class RNN_circular_LowEtAl_reduced(RNN_circular_LowEtAl):
+    # Goal of reducing the model complexity of the parent class
+    def __init__(self,input_size,hidden_size,lr=0.001,irnn=True,outputnn=False,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=1):
+        super().__init__(input_size,hidden_size,lr=0.001,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.output = torch.nn.Linear(hidden_size,2*self.nav_space,bias=True)
+
+    def forward(self, x, raw=False):
+        # Make h0 trainable
+        batch_size_forward = x.size(0)
+        theta0s = torch.ones((batch_size_forward,self.nav_space)) # Gives constant initial hidden state
+        h = self.h0_layer(theta0s)
+        time_steps = x.size(1)
+        # time_steps+1 because we want to include the initial hidden state
+        self.hts = torch.zeros(time_steps+1, batch_size_forward, self.hidden_size)
+        self.hts[0] = h
+        # Main RNN loop
+        for t in range(0,time_steps):
+            h = self.act(self.hidden(h) + self.input(x[:,t,:]))
+            self.hts[t+1] = h
+        # If outputnn is true, use a linear layer to output the hs
+        if not raw:
+            return self.output(self.hts)
+        # Else, output all hts
+        else:
+            return self.hts
