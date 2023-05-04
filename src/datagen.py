@@ -163,3 +163,26 @@ def datagen_lowetal(n_data,t_steps):
     data = dtheta.unsqueeze(2)
     path_integrated_bounded = torch.remainder(path_integrated, 2*np.pi) # For use in analysis
     return data, labels, path_integrated_bounded
+
+def datagen_lowetal_direct(n_data,t_steps):
+    theta_mean = torch.randn((n_data,1)) * 0.1
+    theta = torch.randn((n_data,t_steps)) * 0.3
+    dtheta = theta_mean + theta
+    path_integrated = torch.cumsum(dtheta, dim=1)
+    labels = path_integrated
+    # Necessary to fit into nn model
+    data = dtheta.unsqueeze(2)
+    path_integrated_bounded = torch.remainder(path_integrated, 2*np.pi) # For use in analysis
+    return data, labels, path_integrated_bounded
+
+def datagen_lowetal_direct_bounded(n_data,t_steps,bound=0.5):
+    theta_mean = torch.randn((n_data,1)) * 0.1
+    theta = torch.randn((n_data,t_steps)) * 0.3
+    dtheta = theta_mean + theta
+    path_integrated = torch.cumsum(dtheta, dim=1)
+    labels = path_integrated
+    labels = (labels)*2*np.pi/(2*bound) + np.pi
+    # Necessary to fit into nn model
+    data = dtheta.unsqueeze(2)
+    path_integrated_bounded = torch.remainder(path_integrated, 2*np.pi) # For use in analysis
+    return data, labels, path_integrated_bounded
