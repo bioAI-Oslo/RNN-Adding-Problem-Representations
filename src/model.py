@@ -9,10 +9,18 @@ import torch.nn.functional as F
 from torch.autograd import Variable, functional
 import torch.optim as optim
 
-
 import sys
 sys.path.append('../src')
 from datagen import *
+
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print("Running on GPU: ", device)
+else:
+    device = torch.device("cpu")
+    print("Running on CPU")
+
+torch.set_default_device(device)
 
 
 class torch_RNN1(nn.Module):
@@ -855,7 +863,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
 
     def train(self, epochs=100, loader=None):
         for epoch in tqdm(range(epochs)):
-            data,labels, _ = datagen_lowetal_direct(self.batch_size,self.base_training_tsteps)
+            data,labels = datagen_circular_pm(self.batch_size,self.base_training_tsteps,sigma=0.05)
             loss = self.train_step(data,labels)
         return self.losses
     
@@ -865,8 +873,8 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         for epoch in tqdm(range(epochs)):
             if i%50 == 0:
                 training_steps += 1
-            data,labels,_ = datagen_lowetal_direct(self.batch_size,training_steps)
-            loss = self.train_step(data,labels)
+            data,labels = datagen_circular_pm(self.batch_size,training_steps,sigma=0.05)
+            loss = self.train_step(data.to(device),labels.to(device))
             i+=1
         print("Last training time steps:",training_steps)
         return self.losses

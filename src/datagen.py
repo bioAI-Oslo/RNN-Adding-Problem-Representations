@@ -90,25 +90,14 @@ def datagen_circular(n_data,t_steps):
     # labels[:,0] = 0
     return data,labels
 
-def datagen_circular_pm(n_data,t_steps,bound=0.5):
+def datagen_circular_pm(n_data,t_steps,bound=0.5,sigma=0.1):
     # Data for adding/subtracting problem mapped to a circle, no masks, positive and negative values drawn from Gauss distribution
-    # data = torch.zeros((n_data, t_steps))
-    # labels = torch.zeros((n_data, t_steps))
-    # for i in range(n_data):
-    #     for j in range(t_steps):
-    #         # Draw random number from Gauss distribution to add/subtract to sum
-    #         data[i,j] = torch.empty(1).normal_(0,0.1)
-    #         while torch.sum(data[i,:j+1]) > bound or torch.sum(data[i,:j+1]) < -bound:
-    #             # If sum is outside of bounds, draw new number
-    #             data[i,j] = torch.empty(1).normal_(0,0.1)
-    #         # Timewise labels are the sums
-    #         labels[i,j] = torch.sum(data[i,:j+1])
     # Set up data and labels tensors
-    data = torch.randn((n_data, t_steps)) * 0.1
+    data = torch.randn((n_data, t_steps)) * sigma
     cumsum = torch.cumsum(data, dim=1)
     mask = (cumsum > bound) | (cumsum < -bound)
     while mask.any():
-        data[mask] = torch.randn((mask.sum(),)) * 0.1
+        data[mask] = torch.randn((mask.sum(),)) * sigma
         cumsum = torch.cumsum(data, dim=1)
         mask = (cumsum > bound) | (cumsum < -bound)
     labels = cumsum
@@ -165,6 +154,7 @@ def datagen_lowetal(n_data,t_steps):
     return data, labels, path_integrated_bounded
 
 def datagen_lowetal_direct(n_data,t_steps):
+    # No sin/cos, just the path integrated unbounded
     theta_mean = torch.randn((n_data,1)) * 0.1
     theta = torch.randn((n_data,t_steps)) * 0.3
     dtheta = theta_mean + theta
@@ -176,6 +166,7 @@ def datagen_lowetal_direct(n_data,t_steps):
     return data, labels, path_integrated_bounded
 
 def datagen_lowetal_direct_bounded(n_data,t_steps,bound=0.5):
+    # No sin/cos, just the path integrated bounded
     theta_mean = torch.randn((n_data,1)) * 0.1
     theta = torch.randn((n_data,t_steps)) * 0.3
     dtheta = theta_mean + theta
@@ -186,3 +177,4 @@ def datagen_lowetal_direct_bounded(n_data,t_steps,bound=0.5):
     data = dtheta.unsqueeze(2)
     path_integrated_bounded = torch.remainder(path_integrated, 2*np.pi) # For use in analysis
     return data, labels, path_integrated_bounded
+
