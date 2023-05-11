@@ -779,7 +779,7 @@ class RNN_circular_LowEtAl(nn.Module):
 class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
     # Goal of reducing the model complexity of the parent class
     def __init__(self,input_size,hidden_size,lr=0.001,act_decay=0.01,irnn=True,outputnn=False,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=1):
-        super().__init__(input_size,hidden_size,lr=0.001,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        super().__init__(input_size,hidden_size,lr=lr,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.act_decay = act_decay
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0)
 
@@ -798,7 +798,6 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         for t in range(0,self.time_steps):
             h = self.act(self.hidden(h) + self.input(x[:,t,:]))
             self.hts[t+1] = h
-
         return self.hts
     
     def loss_fn(self, x, y_hat):
@@ -878,3 +877,44 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
             i+=1
         print("Last training time steps:",training_steps)
         return self.losses
+    
+
+class RNN_circular_LowEtAl_bridged_reduced(RNN_circular_LowEtAl_bridged):
+    def __init__(self,input_size,hidden_size,lr=0.001,act_decay=0.01,irnn=True,outputnn=False,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=1,time_back=3):
+        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.time_back = time_back
+
+    def loss_fn(self, x, y_hat):
+        y = self(x)
+        # norm of hts at each time step regularized to be 1
+        activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
+        
+        # Concatenate 0 (h0) to y_hat to make it the same size as y
+        y_hat = torch.cat((torch.zeros(y_hat.size(0),1),y_hat),dim=1)
+        # Permute y_hat to make it the same size as y
+        y_hat = y_hat.permute(1,0)
+        # angle_loss = 0
+        
+        # Main angle loss loop, checks difference in angles for multiple time steps back in time
+        i = torch.arange(1, self.time_steps).unsqueeze(1)
+        j = torch.arange(1, self.time_back).unsqueeze(0)
+        # THIS IS VERY UNCERTAIN, TRY ALSO >= (BUT I THINK IT SHOULD BE >)
+        mask = (i > j).float()
+        j = j * mask
+        # Convert i and j to int
+        i = i.long()
+        j = j.long()
+        normalizer = 1 / (torch.norm(y[i], dim=-1) * torch.norm(y[i-j], dim=-1))
+        # Cant clamp between -1 and 1 because it will cause NaNs in training
+        angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j], dim=-1) * normalizer, -0.9999999, 0.9999999)))
+        # Must use torch.abs because the angle can be negative, but the angle_test only returns positive angles
+        angle_theoretical = torch.abs(y_hat[i]-y_hat[i-j])
+        # Make 0 and 2pi the same angle
+        # angle_theoretical = torch.min(torch.remainder(2*np.pi-(y_hat[i]-y_hat[i-j]),2*np.pi),torch.remainder(2*np.pi-(y_hat[i-j]-y_hat[i]),2*np.pi))
+        angle_loss = torch.mean((angle_test-angle_theoretical)**2)
+
+        self.losses.append(angle_loss.item())
+        self.losses_norm.append(activity_L2.item())
+        # self.losses_circle.append(circle_end_loss.item())
+        loss = angle_loss + activity_L2 # + circle_end_loss
+        return loss
