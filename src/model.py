@@ -819,7 +819,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         # THIS IS VERY UNCERTAIN, TRY >= AND >
         mask = i >= j
         j = j * mask
-        i = i * mask
+        # i = i * mask
         # Convert i and j to int
         normalizer = 1 / (torch.norm(y[i], dim=-1) * torch.norm(y[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
@@ -835,6 +835,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         mask_dim2 = mask.shape[1]
         mask_loss_scale = mask_dim2/mask.sum(dim=1).unsqueeze(1)
         angle_loss = torch.mean(((angle_test-angle_theoretical)*mask_loss_scale.unsqueeze(-1))**2)
+        # angle_loss = torch.mean(((angle_test-angle_theoretical))**2)
 
         # Loss to end in the same position as the start
         # circle_end_loss = 0.0001*torch.mean((y[-1]-y[0])**2)
