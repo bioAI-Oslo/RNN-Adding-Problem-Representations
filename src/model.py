@@ -813,6 +813,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         
         # Main angle loss loop, checks difference in angles for multiple time steps back in time
         i = torch.arange(1, self.time_steps).unsqueeze(1)
+        # Check for 40% of the time steps back in time, to avoid angles beeing too large (above pi) for acos so that they become ambiguous (acos pi-0.1 = acos pi+0.1)
         j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
         # THIS IS VERY UNCERTAIN, TRY ALSO >= (BUT I THINK IT SHOULD BE >)
         mask = (i > j).float()
