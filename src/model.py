@@ -806,7 +806,8 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
         
         # Concatenate 0 (h0) to y_hat to make it the same size as y
-        y_hat = torch.cat((torch.zeros(y_hat.size(0),1),y_hat),dim=1)
+        # WE HAVE TO CONCATENATE THE MIDDLE VALUE OF THE LABELS/WHERE THE LABELS START WHCIH IS OFTEN 0 OR pi
+        y_hat = torch.cat((torch.ones(y_hat.size(0),1)*np.pi,y_hat),dim=1)
         # Permute y_hat to make it the same size as y
         y_hat = y_hat.permute(1,0)
         # angle_loss = 0
@@ -815,20 +816,25 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         i = torch.arange(1, self.time_steps).unsqueeze(1)
         # Check for 40% of the time steps back in time, to avoid angles beeing too large (above pi) for acos so that they become ambiguous (acos pi-0.1 = acos pi+0.1)
         j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
-        # THIS IS VERY UNCERTAIN, TRY ALSO >= (BUT I THINK IT SHOULD BE >)
-        mask = (i > j).float()
+        # THIS IS VERY UNCERTAIN, TRY >= AND >
+        mask = i >= j
         j = j * mask
+        i = i * mask
         # Convert i and j to int
-        i = i.long()
-        j = j.long()
         normalizer = 1 / (torch.norm(y[i], dim=-1) * torch.norm(y[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
         angle_test = torch.abs(torch.acos(torch.clamp(torch.sum(y[i]*y[i-j], dim=-1) * normalizer, -0.9999999, 0.9999999)))
+        # Make the angles that are not supposed to be checked 0
+        angle_test = angle_test * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test only returns positive angles
         angle_theoretical = torch.abs(y_hat[i]-y_hat[i-j])
         # Make 0 and 2pi the same angle
         # angle_theoretical = torch.min(torch.remainder(2*np.pi-(y_hat[i]-y_hat[i-j]),2*np.pi),torch.remainder(2*np.pi-(y_hat[i-j]-y_hat[i]),2*np.pi))
-        angle_loss = torch.mean((angle_test-angle_theoretical)**2)
+
+        # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
+        mask_dim2 = mask.shape[1]
+        mask_loss_scale = mask_dim2/mask.sum(dim=1).unsqueeze(1)
+        angle_loss = torch.mean(((angle_test-angle_theoretical)*mask_loss_scale.unsqueeze(-1))**2)
 
         # Loss to end in the same position as the start
         # circle_end_loss = 0.0001*torch.mean((y[-1]-y[0])**2)
