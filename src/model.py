@@ -781,7 +781,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
     def __init__(self,input_size,hidden_size,lr=0.001,act_decay=0.01,irnn=True,outputnn=False,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=1):
         super().__init__(input_size,hidden_size,lr=lr,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.act_decay = act_decay
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.0)
 
         self.losses_norm = []
 
