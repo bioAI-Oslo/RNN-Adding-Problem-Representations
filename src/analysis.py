@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from tqdm import tqdm
+import umap
+import plotly.express as px
+from sklearn.decomposition import PCA
 
 import sys
 sys.path.append('../src')
@@ -24,7 +27,7 @@ def plot_norm(hts,avg_only=True):
     print("Mean norm: ", np.mean(hts))
 
 
-def tuning_curve(t_test=40,test_batch_size=5000, bins=2000, spherical_data=True):
+def tuning_curve(model,t_test=40,test_batch_size=5000, bins=2000, spherical_data=True):
     if spherical_data:
         data, _, labels = datagen_lowetal(5000,t_test)
     else:
@@ -36,7 +39,7 @@ def tuning_curve(t_test=40,test_batch_size=5000, bins=2000, spherical_data=True)
     xs = xs.cpu().detach().numpy().T
 
     # Get the hidden states inferenced from the test data
-    hts = model1(data[0:test_batch_size],raw=True)
+    hts = model(data[0:test_batch_size],raw=True)
     hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
     n_cells = hts.shape[2]
     
@@ -91,7 +94,6 @@ def plot_tuning_curve(activity,bin_edges,k,spherical=False,linear=False,plot_hea
 
 def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
     if if_pca:
-        from sklearn.decomposition import PCA
 
         reducer = PCA(n_components=n_components)
         reducer.fit(activity.T)
@@ -104,12 +106,11 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
             plt.title('PCA projection of the activity of the grid cells', fontsize=12)
             plt.show()
         else:
-            import plotly.express as px
             fig = px.scatter_3d(embedding, x=0, y=1, z=2)
             fig.show()
     else:
         # UMAP
-        import umap
+        
         reducer = umap.UMAP(n_neighbors=500, n_components=2)
         reducer.fit(activity.T)
         embedding = reducer.transform(activity.T)
@@ -119,18 +120,17 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
             plt.title('UMAP projection of the activity of the grid cells', fontsize=12)
             plt.show()
         else:
-            import plotly.express as px
             fig = px.scatter_3d(embedding, x=0, y=1, z=2)
             fig.show()
 
     return embedding, reducer
 
-def test_angle_inference(reducer,t_test=40,test_batch_size=1000):
+def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000):
     # Same datagen as in training
     data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
 
     # Inference model to get the hidden states
-    y_hat = model1(data[0:test_batch_size],raw=True)
+    y_hat = model(data[0:test_batch_size],raw=True)
     y_hat = y_hat.permute(1,0,2)
     y_hat = y_hat.cpu().detach().numpy()
 
