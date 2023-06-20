@@ -99,7 +99,7 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
         reducer.fit(activity.T)
         embedding = reducer.transform(activity.T)
         # Explained variance
-        print(f"Explained variance for PCA with {n_components} components:", np.sum(reducer.explained_variance_ratio_), "%")
+        print(f"Explained variance for PCA with {n_components} components: {np.sum(reducer.explained_variance_ratio_):.3f} %")
         if plot and n_components==2:
             plt.scatter(embedding[:,0],embedding[:,1],s=10)
             plt.gca().set_aspect('equal', 'datalim')
