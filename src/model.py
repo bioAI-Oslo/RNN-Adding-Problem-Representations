@@ -786,7 +786,7 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
         self.losses_norm = []
 
     def forward(self, x, raw=False):
-        # Make h0 trainable
+        # Define initial hidden state h0 as constant 1 vector at angle pi
         batch_size_forward = x.size(0)
         h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
         h[:,0] = 1

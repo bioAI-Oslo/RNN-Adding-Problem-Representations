@@ -219,6 +219,10 @@ def plot_path_accuracy(angs,y,example_path=0):
     trivial_path_err = np.abs(path-y_mean)
     trivial_path_err_mean = np.mean(trivial_path_err,axis=0)
     trivial_path_err_mean_std = np.std(trivial_path_err,axis=0)
+    # Print mean error
+    print("Mean error: ",np.mean(path_err))
+    print("Mean end error: ",path_err_mean[-1])
+
     # Plot
     plt.plot(trivial_path_err_mean,label="Trivial 0 guess error")
     plt.plot(path_err_mean,label="Model Error")
