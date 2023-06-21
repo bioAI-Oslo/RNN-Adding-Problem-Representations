@@ -13,18 +13,18 @@ import ratinabox #IMPORT
 from ratinabox.Environment import Environment
 from ratinabox.Agent import Agent
 
-def smooth_wandering_2D(n_data,t_steps,bound=0.5):
+def smooth_wandering_2D(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     # Smooth wandering in 2D with small random pertubation on head direction and velocity
     # Save velocity in x and y direction in data
     data = torch.zeros((n_data, t_steps, 2))
     # Save position in x and y direction in labels
     labels = torch.zeros((n_data, t_steps, 2))
     start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
-    velocities = torch.rand((n_data,t_steps))*0.1
-    direction_pert = torch.randn((n_data,t_steps))*0.2*np.pi
-    directions = start_directions+direction_pert
-    data[:,:,0] = velocities*torch.cos(start_directions+direction_pert)
-    data[:,:,1] = velocities*torch.sin(start_directions+direction_pert)
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = velocities*torch.cos(directions)
+    data[:,:,1] = velocities*torch.sin(directions)
     labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
     labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
     # Print if first position is outside the bound
@@ -32,47 +32,53 @@ def smooth_wandering_2D(n_data,t_steps,bound=0.5):
     bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
     while bound_mask.any():
         # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
-        velocities[bound_mask] = torch.rand((bound_mask.sum(),))*0.1
-        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*2
-        data[bound_mask][:,0] = velocities[bound_mask]*torch.cos(direction_pert[bound_mask])
-        data[bound_mask][:,1] = velocities[bound_mask]*torch.sin(direction_pert[bound_mask])
+        velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
+        # For the first timestep redraw for each trajectory the direction changes by 90 degrees
+        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
+        directions = torch.cumsum(direction_pert,dim=1)+start_directions
+        data[:,:,0] = velocities*torch.cos(directions)
+        data[:,:,1] = velocities*torch.sin(directions)
         labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-        print(bound_mask.sum())
     return data, labels
 
-def smooth_wandering_2D_bing(n_data,t_steps,bound=0.5,sigma=0.05):
-    # Data for adding/subtracting problem mapped to a circle, no masks, positive and negative values drawn from Gauss distribution
-    # Set up data and labels tensors
+# @torch.compile
+def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save velocity in x and y direction in data
     data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
     labels = torch.zeros((n_data, t_steps, 2))
-    # Define starting direction
-    direction = torch.randn((n_data, 1)) * sigma
-    for i in range(t_steps):
-        # Define direction perturbations and random speeds
-        direction += torch.randn((n_data, 1)) * sigma
-        speed = torch.randn((n_data, 1)) * sigma
-        # Convert direction and speed to positions and velocities in xy
-        dx = speed * torch.cos(direction)
-        dy = speed * torch.sin(direction)
-        data[:, i] = torch.cat((dx, dy), dim=1)
-        if i == 0:
-            labels[:, i] = data[:, i]
-        else:
-            labels[:, i] = labels[:, i-1] + data[:, i]
-        # Keep the random walk within the defined boundaries
-        mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-        while mask.any():
-            direction[mask] += torch.randn((mask.sum(), 1)) * sigma
-            speed[mask] = torch.randn((mask.sum(), 1)) * sigma
-            dx[mask] = speed[mask] * torch.cos(direction[mask])
-            dy[mask] = speed[mask] * torch.sin(direction[mask])
-            data[mask,i] = torch.cat((dx[mask], dy[mask]), dim=1)
-            labels[mask,i] = labels[mask,i-1] + data[mask,i]
-            mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-    # Necessary to fit into nn model
-    data = data.unsqueeze(3)
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = velocities*torch.cos(directions)
+    data[:,:,1] = velocities*torch.sin(directions)
+    labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
+    labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
+    bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+    count = 0
+    while bound_mask.any():
+        # Extract the first True in each row
+        bound_mask_first_true = torch.zeros_like(bound_mask)
+        first_true = torch.argmax(bound_mask.int(), dim=1)
+        bound_mask_first_true[range(bound_mask.shape[0]), first_true] = True
+        bound_mask[range(bound_mask.shape[0]), first_true] = False
+        # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
+        velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
+        # For the first timestep redraw for each trajectory the direction changes by 90 degrees
+        direction_pert[bound_mask_first_true] = torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma + direction_pert[bound_mask_first_true] + np.pi/2
+        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
+        directions = torch.cumsum(direction_pert,dim=1)+start_directions
+        data[:,:,0] = velocities*torch.cos(directions)
+        data[:,:,1] = velocities*torch.sin(directions)
+        labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
+        labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
+        bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+        count += 1
+    print(count)
     return data, labels
 
 def random_walk(n, dt=0.1, x0=0.0, y0=0.0, v0=0.0, sigma=1.0):
