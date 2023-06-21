@@ -27,12 +27,13 @@ def plot_norm(hts,avg_only=True):
     print("Mean norm: ", np.mean(hts))
 
 
-def tuning_curve(model,t_test=40,test_batch_size=5000, bins=2000, spherical_data=True):
-    if spherical_data:
-        data, _, labels = datagen_lowetal(5000,t_test)
+def tuning_curve(model,t_test=40,test_batch_size=5000, bins=2000, spherical_data=True, in_activity=None):
+    if spherical_data and in_activity is None:
+        data, _, labels = datagen_lowetal(test_batch_size,t_test)
+    elif in_activity is not None:
+        data, labels = in_activity
     else:
-        data,labels = datagen_circular_pm(5000,t_test,sigma=0.05,bound=0.5)
-    
+        data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
     
     # Get positions from labels
     xs = labels[0:test_batch_size]
@@ -125,9 +126,12 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
 
     return embedding, reducer
 
-def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000):
+def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000,in_activity=None, start=np.pi):
     # Same datagen as in training
-    data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
+    if in_activity is None:
+        data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
+    else:
+        data, labels = in_activity
 
     # Inference model to get the hidden states
     y_hat = model(data[0:test_batch_size],raw=True)
@@ -144,7 +148,7 @@ def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000):
     y = labels[0:test_batch_size]
     y = y.cpu().detach().numpy()
     # Concatenate pi to the start of y to represent starting angle
-    y = np.concatenate((np.ones((test_batch_size,1))*np.pi,y),axis=-1)
+    y = np.concatenate((np.ones((test_batch_size,1))*start,y),axis=-1)
 
     # Error between predicted and theoretical angles
     err = np.zeros((test_batch_size,t_test))
