@@ -13,6 +13,15 @@ import ratinabox #IMPORT
 from ratinabox.Environment import Environment
 from ratinabox.Agent import Agent
 
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print("Running on GPU: ", device)
+else:
+    device = torch.device("cpu")
+    print("Running on CPU")
+
+torch.set_default_device(device)
+
 def smooth_wandering_2D(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     # Smooth wandering in 2D with small random pertubation on head direction and velocity
     # Save velocity in x and y direction in data
