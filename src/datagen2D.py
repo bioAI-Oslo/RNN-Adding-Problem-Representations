@@ -41,6 +41,7 @@ def smooth_wandering_2D(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
         labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+    data = data.unsqueeze(-1)
     return data, labels
 
 # @torch.compile
@@ -78,7 +79,9 @@ def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sig
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
         count += 1
-    print(count)
+    # print(count)
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
     return data, labels
 
 def random_walk(n, dt=0.1, x0=0.0, y0=0.0, v0=0.0, sigma=1.0):
