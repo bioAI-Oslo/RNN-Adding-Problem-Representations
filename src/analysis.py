@@ -9,6 +9,7 @@ from sklearn.decomposition import PCA
 import sys
 sys.path.append('../src')
 from datagen import *
+from datagen2D import *
 
 def plot_norm(hts,avg_only=True):
     if avg_only:
@@ -126,7 +127,7 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
 
     return embedding, reducer
 
-def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000,in_activity=None, start=np.pi):
+def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000,in_activity=None,start=np.pi):
     # Same datagen as in training
     if in_activity is None:
         data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
@@ -248,3 +249,73 @@ def plot_path_accuracy(angs,y,example_path=0):
     plt.xlabel("Time Step")
     plt.ylabel("Angle (Radians)")
     plt.show()
+
+def tuning_curve_2D(model,t_test=40,test_batch_size=5000, bins=2000, in_activity=None):
+    if in_activity is None:
+        data, labels = smooth_wandering_2D_squarefix(n_data=test_batch_size,t_steps=t_test,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01)
+    else:
+        data, labels = in_activity
+        test_batch_size = data.shape[0]
+        t_test = data.shape[1]
+    
+    
+    # Get positions from labels
+    xs = labels[0:test_batch_size,:,0]
+    if type(xs) is torch.Tensor:
+        xs = xs.cpu().detach().numpy().T
+    ys = labels[0:test_batch_size,:,1]
+    if type(ys) is torch.Tensor:
+        ys = ys.cpu().detach().numpy().T
+
+    # Get the hidden states inferenced from the test data
+    hts_x = model(data[0:test_batch_size,:,0],raw=True)
+    hts_x = hts_x.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    hts_y = model(data[0:test_batch_size,:,1],raw=True)
+    hts_y = hts_y.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    n_cells = hts_x.shape[2]
+    
+    import scipy.stats as stats
+
+    activity = np.zeros((n_cells,bins,bins))
+
+    for k in tqdm(range(n_cells)):
+        # Make all activity positive
+        hts_xk = abs(hts_x[1:,:,k])
+        hts_yk = abs(hts_y[1:,:,k])
+        # Bins equally spaced from 0 to 1 in time_steps amount of bins
+        # bin_means, bin_edges, binnumber = stats.binned_statistic(xs.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
+        bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_xk.flatten() * hts_yk.flatten(),statistic='mean',bins=bins)
+        activity[k,:] = bin_means
+        np.nan_to_num(activity,copy=False)
+    return activity, bin_edges_x, bin_edges_y
+
+def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=False,more_plots=False,plot_head_frac=1/10):
+    if scale_to_one:
+        scaler = 1/(2*np.pi)
+    else:
+        scaler = 1
+
+    xbin_edges = xbin_edges[:-1]*scaler
+    ybin_edges = ybin_edges[:-1]*scaler
+
+    n_cells = activity.shape[0]
+
+    # Plot heat map of activity of cell k_test
+    plt.figure(figsize=(5,5))
+    plt.imshow(activity[k_test],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k_test]))
+    plt.colorbar()
+    plt.title("Heat map of the activity of cell "+str(k_test))
+    plt.xlabel(r"Position $x$")
+    plt.ylabel(r"Position $y$")
+    plt.show()
+
+    if more_plots:
+        fig, ax = plt.subplots(int(32*plot_head_frac),4)
+        fig.set_size_inches(15, 80*plot_head_frac)
+        fig.subplots_adjust(hspace=1,wspace=0.2)
+        for k in tqdm(range(int(n_cells*plot_head_frac))):
+            ax[k//4,k%4].imshow(activity[k],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k]))
+            ax[k//4,k%4].set_title("Cell "+str(k))
+            ax[k//4,k%4].set_xlabel(r"Position $x$")
+            ax[k//4,k%4].set_ylabel(r"Position $y$")
+        plt.show()

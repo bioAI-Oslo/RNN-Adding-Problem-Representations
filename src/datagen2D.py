@@ -198,6 +198,7 @@ def random_walk(n, dt=0.1, x0=0.0, y0=0.0, v0=0.0, sigma=1.0):
     return x, y, vx, vy
 
 def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
+    # Use rat-in-a-box package to generate data
     # Data: 2D velocity vectors
     data = torch.zeros((n_data, t_steps, 2))
     # Labels: 2D positions
@@ -215,3 +216,23 @@ def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
     # labels = labels*box_size
     return data, labels
             
+
+def rat_box_vemund(n_data,t_steps,box_size=1):
+    from ratsimulator import Agent, trajectory_generator, batch_trajectory_generator
+    from ratsimulator.Environment import Rectangle
+
+    # Init Environment
+    boxsize = (box_size,box_size)
+    soft_boundary = 0.03
+    environment = Rectangle(boxsize=boxsize, soft_boundary=soft_boundary)
+    # agent = Agent(environment, boundary_mode="sorchers")
+    labels = torch.zeros((n_data,t_steps,2))
+    data = torch.zeros((n_data,t_steps,2))
+
+    for i in tqdm(range(n_data)):
+        gen = trajectory_generator(environment,seq_len=t_steps-1)
+        outputs = next(gen)
+        labels[i], data[i] = torch.tensor(outputs[0]), torch.tensor(outputs[1])
+
+    data = data.unsqueeze(-1)
+    return data, labels
