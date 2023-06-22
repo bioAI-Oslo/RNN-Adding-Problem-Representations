@@ -132,6 +132,8 @@ def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000,in_activit
         data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
     else:
         data, labels = in_activity
+        t_test = data.shape[1]
+        test_batch_size = data.shape[0]
 
     # Inference model to get the hidden states
     y_hat = model(data[0:test_batch_size],raw=True)
