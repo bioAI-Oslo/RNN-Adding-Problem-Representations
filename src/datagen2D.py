@@ -88,7 +88,50 @@ def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sig
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
         count += 1
-    # print(count)
+    print(count)
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
+    # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
+    # Lower stability will fill the whole square with paths, but the path generation may be more unstable
+    # v_bound_reduction is the reduction in velocity when hitting a boundry and a lower value here will increase the stability
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save velocity in x and y direction in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = velocities*torch.cos(directions)
+    data[:,:,1] = velocities*torch.sin(directions)
+    labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
+    labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
+    bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+    count = 0
+    while bound_mask.any():
+        # Extract the first True in each row
+        bound_mask_first_true = torch.zeros_like(bound_mask)
+        first_true = torch.argmax(bound_mask.int(), dim=1)
+        bound_mask_first_true[range(bound_mask.shape[0]), first_true] = True
+        bound_mask[range(bound_mask.shape[0]), first_true] = False
+        # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
+        velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction # torch.rand((bound_mask_first_true.sum(),))*v_sigma
+        velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
+        # For the first timestep redraw for each trajectory the direction changes by 90 degrees
+        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*stability+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
+        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
+        directions = torch.cumsum(direction_pert,dim=1)+start_directions
+        data[:,:,0] = velocities*torch.cos(directions)
+        data[:,:,1] = velocities*torch.sin(directions)
+        labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
+        labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
+        bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+        count += 1
+    print(count)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
@@ -154,21 +197,21 @@ def random_walk(n, dt=0.1, x0=0.0, y0=0.0, v0=0.0, sigma=1.0):
 
     return x, y, vx, vy
 
-def rat_box(n_data,t_steps):
+def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
     # Data: 2D velocity vectors
     data = torch.zeros((n_data, t_steps, 2))
     # Labels: 2D positions
     labels = torch.zeros((n_data, t_steps, 2))
     Env = Environment() 
     Ag = Agent(Env)
-    Ag.speed_mean = 5
-    Ag.speed_std = 5
+    # Ag.speed_mean = speed_mean
+    # Ag.speed_std = speed_std
     for i in tqdm(range(n_data)):
         for j in range(t_steps): 
             data[i,j] = torch.tensor(Ag.pos)
             labels[i,j] = torch.tensor(Ag.velocity)
             Ag.update()
     data = data.unsqueeze(3)
-    labels = labels*2*np.pi
+    # labels = labels*box_size
     return data, labels
             
