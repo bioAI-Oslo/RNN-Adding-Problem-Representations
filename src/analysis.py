@@ -289,6 +289,59 @@ def tuning_curve_2D(model,t_test=40,test_batch_size=5000, bins=2000, in_activity
         np.nan_to_num(activity,copy=False)
     return activity, bin_edges_x, bin_edges_y
 
+def tuning_curve_23D(model,in_activity,bins=2000):
+    data, labels = in_activity
+    test_batch_size = data.shape[0]
+    t_test = data.shape[1]
+    
+    # Get positions from labels
+    xs = labels[0:test_batch_size,:,0]
+    if type(xs) is torch.Tensor:
+        xs = xs.cpu().detach().numpy().T
+    ys = labels[0:test_batch_size,:,1]
+    if type(ys) is torch.Tensor:
+        ys = ys.cpu().detach().numpy().T
+
+    # Convert to 0,60,120 degree decomposition
+    basis1 = torch.tensor([np.cos(0), np.sin(0)])
+    basis2 = torch.tensor([np.cos(np.pi/3), np.sin(np.pi/3)])
+    basis3 = torch.tensor([np.cos(2*np.pi/3), np.sin(2*np.pi/3)])
+    basises = torch.stack([basis1, basis2, basis3], dim=0)
+    # Scale the decompositioned data so that they can be reconstructed to the original data
+    basis_scale = 4/3
+    data_23D = torch.zeros(test_batch_size,t_test,3)
+    labels_23D = torch.zeros(test_batch_size,t_test,3)
+    for i,basis in enumerate(basises):
+        data_23D[:,:,i] = torch.sum(data.squeeze()/torch.norm(data,dim=2)*basis,dim=2)*basis_scale
+        labels_23D[:,:,i] = torch.sum(labels/torch.norm(labels.unsqueeze(-1),dim=2)*basis,dim=2)*basis_scale
+
+    data_23D = data_23D.unsqueeze(-1)
+
+    # Get the hidden states inferenced from the test data for each dimension/decomposition
+    hts_x = model(data_23D[0:test_batch_size,:,0],raw=True)
+    hts_x = hts_x.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    hts_y = model(data_23D[0:test_batch_size,:,1],raw=True)
+    hts_y = hts_y.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    hts_z = model(data_23D[0:test_batch_size,:,2],raw=True)
+    hts_z = hts_z.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    n_cells = hts_x.shape[2]
+    
+    import scipy.stats as stats
+
+    activity = np.zeros((n_cells,bins,bins))
+
+    for k in tqdm(range(n_cells)):
+        # Make all activity positive
+        hts_xk = abs(hts_x[1:,:,k])
+        hts_yk = abs(hts_y[1:,:,k])
+        hts_zk = abs(hts_z[1:,:,k])
+        # Bins equally spaced from 0 to 1 in time_steps amount of bins
+        # bin_means, bin_edges, binnumber = stats.binned_statistic(xs.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
+        bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_xk.flatten() + hts_yk.flatten() + hts_zk.flatten(),statistic='mean',bins=bins)
+        activity[k,:] = bin_means
+        np.nan_to_num(activity,copy=False)
+    return activity, bin_edges_x, bin_edges_y
+
 def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=False,more_plots=False,plot_head_frac=1/10):
     if scale_to_one:
         scaler = 1/(2*np.pi)
