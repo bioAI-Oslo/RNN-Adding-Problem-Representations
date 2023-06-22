@@ -308,12 +308,12 @@ def tuning_curve_23D(model,in_activity,bins=2000):
     basis3 = torch.tensor([np.cos(2*np.pi/3), np.sin(2*np.pi/3)])
     basises = torch.stack([basis1, basis2, basis3], dim=0)
     # Scale the decompositioned data so that they can be reconstructed to the original data
-    basis_scale = 4/3
+    basis_scale = 2/3
     data_23D = torch.zeros(test_batch_size,t_test,3)
     labels_23D = torch.zeros(test_batch_size,t_test,3)
     for i,basis in enumerate(basises):
-        data_23D[:,:,i] = torch.sum(data.squeeze()/torch.norm(data,dim=2)*basis,dim=2)*basis_scale
-        labels_23D[:,:,i] = torch.sum(labels/torch.norm(labels.unsqueeze(-1),dim=2)*basis,dim=2)*basis_scale
+        data_23D[:,:,i] = torch.sum(data.squeeze()*basis,dim=2)*basis_scale
+        labels_23D[:,:,i] = torch.sum(labels*basis,dim=2)*basis_scale
 
     data_23D = data_23D.unsqueeze(-1)
 
@@ -341,6 +341,26 @@ def tuning_curve_23D(model,in_activity,bins=2000):
         activity[k,:] = bin_means
         np.nan_to_num(activity,copy=False)
     return activity, bin_edges_x, bin_edges_y
+
+def convert_2D_23D(data,labels):
+    # Convert to 0,60,120 degree decomposition from 0,90 degree decomposition
+    test_batch_size = data.shape[0]
+    t_test = data.shape[1]
+    
+    basis1 = torch.tensor([np.cos(0), np.sin(0)])
+    basis2 = torch.tensor([np.cos(np.pi/3), np.sin(np.pi/3)])
+    basis3 = torch.tensor([np.cos(2*np.pi/3), np.sin(2*np.pi/3)])
+    basises = torch.stack([basis1, basis2, basis3], dim=0)
+    # Scale the decompositioned data so that they can be reconstructed to the original data
+    basis_scale = 2/3
+    data_23D = torch.zeros(test_batch_size,t_test,3)
+    labels_23D = torch.zeros(test_batch_size,t_test,3)
+    for i,basis in enumerate(basises):
+        data_23D[:,:,i] = torch.sum(data.squeeze()*basis,dim=2)*basis_scale
+        labels_23D[:,:,i] = torch.sum(labels*basis,dim=2)*basis_scale
+
+    data_23D = data_23D.unsqueeze(-1)
+    return data_23D, labels_23D, basises
 
 def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=False,more_plots=False,plot_head_frac=1/10):
     if scale_to_one:
