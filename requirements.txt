@@ -7,5 +7,4 @@ torch
 torchvision
 torchaudio
 tqdm
-torchsummary
 pandas
