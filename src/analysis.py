@@ -342,14 +342,18 @@ def tuning_curve_23D(model,in_activity,bins=2000):
         np.nan_to_num(activity,copy=False)
     return activity, bin_edges_x, bin_edges_y
 
-def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, in_activity=None):
+def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, in_activity=None,start=0):
     if in_activity is None:
         data, labels = smooth_wandering_2D_squarefix(n_data=test_batch_size,t_steps=t_test,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01)
     else:
         data, labels = in_activity
         test_batch_size = data.shape[0]
         t_test = data.shape[1]
-    
+
+    # Append 0,0 to labels
+    labels_old = labels
+    labels = torch.ones(test_batch_size,t_test+1,2)*start
+    labels[:,1:,:] = labels_old
     
     # Get positions from labels
     xs = labels[0:test_batch_size,:,0]
@@ -362,7 +366,6 @@ def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, i
     # Get the hidden states inferenced from the test data
     hts = model(data,raw=True)
     hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
-    print(hts.shape)
     n_cells = hts.shape[2]
     
     import scipy.stats as stats
@@ -371,7 +374,7 @@ def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, i
 
     for k in tqdm(range(n_cells)):
         # Make all activity positive
-        hts_k = abs(hts[1:,:,k])
+        hts_k = abs(hts[:,:,k])
         # Bins equally spaced from 0 to 1 in time_steps amount of bins
         # bin_means, bin_edges, binnumber = stats.binned_statistic(xs.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
         bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
@@ -409,6 +412,7 @@ def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=Fa
     ybin_edges = ybin_edges[:-1]*scaler
 
     n_cells = activity.shape[0]
+    cell_scaler = n_cells/128
 
     # Plot heat map of activity of cell k_test
     plt.figure(figsize=(5,5))
@@ -420,8 +424,8 @@ def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=Fa
     plt.show()
 
     if more_plots:
-        fig, ax = plt.subplots(int(32*plot_head_frac),4)
-        fig.set_size_inches(15, 80*plot_head_frac)
+        fig, ax = plt.subplots(int(32*plot_head_frac*cell_scaler),4)
+        fig.set_size_inches(15, 80*plot_head_frac*cell_scaler)
         fig.subplots_adjust(hspace=1,wspace=0.2)
         for k in tqdm(range(int(n_cells*plot_head_frac))):
             ax[k//4,k%4].imshow(activity[k],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k]))

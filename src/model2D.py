@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable, functional
 import torch.optim as optim
 
+from Sophia import SophiaG
+
 import sys
 sys.path.append('../src')
 from datagen import *
@@ -24,7 +26,7 @@ else:
 torch.set_default_device(device)
 
 class RNN_circular_2D_xy_Low(nn.Module):
-    def __init__(self,input_size,hidden_size,lr=0.001,act_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__()
         self.input_size = input_size
         # self.time_steps = time_steps
@@ -72,7 +74,8 @@ class RNN_circular_2D_xy_Low(nn.Module):
         self.loss_func = torch.nn.MSELoss()
 
         self.lr = lr
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.01)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.01)
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=0.01)
 
         self.losses = []
         self.accs = []
@@ -112,7 +115,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
         # Backward hook to clip gradients
         loss = self.loss_fn(x, y_hat)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), 2.0) # Clip gradients as in paper Low et al.
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0) # Clip gradients as in paper Low et al.
         self.optimizer.step()
         # Print weight gradient norms
         # print("Hidden weight grad norm:",torch.norm(self.hidden.weight.grad))
@@ -138,7 +141,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
         for epoch in tqdm(range(epochs)):
             # data,labels = datagen_circular_pm(self.batch_size,self.base_training_tsteps,sigma=0.05)
             data,labels = smooth_wandering_2D_squarefix(self.batch_size,self.base_training_tsteps)
-            labels = sincos_2D(labels)
+            labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
         return self.losses
     
@@ -146,10 +149,10 @@ class RNN_circular_2D_xy_Low(nn.Module):
         i = 0
         training_steps = 1
         for epoch in tqdm(range(epochs)):
-            if i%50 == 0:
+            if i%15 == 0:
                 training_steps += 1
             data,labels = smooth_wandering_2D_squarefix(self.batch_size,training_steps)
-            labels = sincos_2D(labels)
+            labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
             i+=1
         print("Last training time steps:",training_steps)
