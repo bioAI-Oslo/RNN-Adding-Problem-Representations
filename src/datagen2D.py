@@ -111,7 +111,7 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
     labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
     labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
     bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-    # count = 0
+    count = 0
     while bound_mask.any():
         # Extract the first True in each row
         bound_mask_first_true = torch.zeros_like(bound_mask)
@@ -122,7 +122,7 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
         velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction # torch.rand((bound_mask_first_true.sum(),))*v_sigma
         velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
         # For the first timestep redraw for each trajectory the direction changes by 90 degrees
-        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*stability+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
+        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*(stability)+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
         direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
         directions = torch.cumsum(direction_pert,dim=1)+start_directions
         data[:,:,0] = velocities*torch.cos(directions)
@@ -130,7 +130,7 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
         labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-        # count += 1
+        count += 1
     # print(count)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
