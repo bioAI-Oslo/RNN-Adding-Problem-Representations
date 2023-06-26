@@ -111,7 +111,7 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
     labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
     labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
     bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-    count = 0
+    # count = 0
     while bound_mask.any():
         # Extract the first True in each row
         bound_mask_first_true = torch.zeros_like(bound_mask)
@@ -130,8 +130,8 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
         labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
         labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
-        count += 1
-    print(count)
+        # count += 1
+    # print(count)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
@@ -236,3 +236,11 @@ def rat_box_vemund(n_data,t_steps,box_size=1):
 
     data = data.unsqueeze(-1)
     return data, labels
+
+def sincos_2D(labels):
+    # Convert 2D data and labels to sin and cos for each dimension
+    labels_new = torch.zeros((labels.shape[0],labels.shape[1],labels.shape[2]*2))
+    for i in range(labels.shape[2]):
+        labels_new[:,:,2*i] = torch.sin(labels[:,:,i])
+        labels_new[:,:,2*i+1] = torch.cos(labels[:,:,i])
+    return labels_new
