@@ -96,7 +96,7 @@ def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sig
     labels = labels*2*np.pi/(2*bound)
     return data, labels
 
-# @torch.compile
+@torch.compile
 def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
     # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
     # Lower stability will fill the whole square with paths, but the path generation may be more unstable
@@ -123,10 +123,10 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0
         bound_mask_first_true[range(bound_mask.shape[0]), first_true] = True
         bound_mask[range(bound_mask.shape[0]), first_true] = False
         # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
-        velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction*0.99**count # torch.rand((bound_mask_first_true.sum(),))*v_sigma
+        velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction*0.999**count # torch.rand((bound_mask_first_true.sum(),))*v_sigma
         velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
         # For the first timestep redraw for each trajectory the direction changes by 90 degrees
-        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*(stability + count*0.0001)+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
+        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*(stability)+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
         direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
         directions = torch.cumsum(direction_pert,dim=1)+start_directions
         data[:,:,0] = velocities*torch.cos(directions)
