@@ -284,7 +284,7 @@ def tuning_curve_2D(model,t_test=40,test_batch_size=5000, bins=2000, in_activity
         hts_yk = abs(hts_y[1:,:,k])
         # Bins equally spaced from 0 to 1 in time_steps amount of bins
         # bin_means, bin_edges, binnumber = stats.binned_statistic(xs.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
-        bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_xk.flatten() * hts_yk.flatten(),statistic='mean',bins=bins)
+        bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_xk.flatten() + hts_yk.flatten(),statistic='mean',bins=bins)
         activity[k,:] = bin_means
         np.nan_to_num(activity,copy=False)
     return activity, bin_edges_x, bin_edges_y
