@@ -342,6 +342,43 @@ def tuning_curve_23D(model,in_activity,bins=2000):
         np.nan_to_num(activity,copy=False)
     return activity, bin_edges_x, bin_edges_y
 
+def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, in_activity=None):
+    if in_activity is None:
+        data, labels = smooth_wandering_2D_squarefix(n_data=test_batch_size,t_steps=t_test,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01)
+    else:
+        data, labels = in_activity
+        test_batch_size = data.shape[0]
+        t_test = data.shape[1]
+    
+    
+    # Get positions from labels
+    xs = labels[0:test_batch_size,:,0]
+    if type(xs) is torch.Tensor:
+        xs = xs.cpu().detach().numpy().T
+    ys = labels[0:test_batch_size,:,1]
+    if type(ys) is torch.Tensor:
+        ys = ys.cpu().detach().numpy().T
+
+    # Get the hidden states inferenced from the test data
+    hts = model(data,raw=True)
+    hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    print(hts.shape)
+    n_cells = hts.shape[2]
+    
+    import scipy.stats as stats
+
+    activity = np.zeros((n_cells,bins,bins))
+
+    for k in tqdm(range(n_cells)):
+        # Make all activity positive
+        hts_k = abs(hts[1:,:,k])
+        # Bins equally spaced from 0 to 1 in time_steps amount of bins
+        # bin_means, bin_edges, binnumber = stats.binned_statistic(xs.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
+        bin_means, bin_edges_x, bin_edges_y, binnumber = stats.binned_statistic_2d(xs.flatten(),ys.flatten(),hts_k.flatten(),statistic='mean',bins=bins)
+        activity[k,:] = bin_means
+        np.nan_to_num(activity,copy=False)
+    return activity, bin_edges_x, bin_edges_y
+
 def convert_2D_23D(data,labels):
     # Convert to 0,60,120 degree decomposition from 0,90 degree decomposition
     test_batch_size = data.shape[0]
