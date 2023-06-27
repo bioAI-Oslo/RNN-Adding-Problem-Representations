@@ -83,8 +83,9 @@ class RNN_circular_2D_xy_Low(nn.Module):
     def forward(self, x, raw=False):
         # Make h0 trainable
         batch_size_forward = x.size(0)
-        h = torch.ones((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
-        h = h/np.sqrt(self.hidden_size) # Normalize initial hidden state
+        h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
+        # h = h/np.sqrt(self.hidden_size) # Normalize initial hidden state
+        h[:,0] = 1 # Initialize first cell to 1
         self.time_steps = x.size(1)
         # time_steps+1 because we want to include the initial hidden state
         self.hts = torch.zeros(self.time_steps+1, batch_size_forward, self.hidden_size)
@@ -157,3 +158,10 @@ class RNN_circular_2D_xy_Low(nn.Module):
             i+=1
         print("Last training time steps:",training_steps)
         return self.losses
+    
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        for i in tqdm(range(len(input))):
+            data = input[i][0]
+            labels = input[i][1]
+            loss = self.train_step(data.to(device),labels.to(device))
