@@ -164,4 +164,5 @@ class RNN_circular_2D_xy_Low(nn.Module):
         for i in tqdm(range(len(input))):
             data = input[i][0]
             labels = input[i][1]
+            labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
