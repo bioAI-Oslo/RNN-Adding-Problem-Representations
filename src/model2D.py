@@ -175,12 +175,12 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.output = torch.nn.Linear(self.hidden_size,self.nav_space,bias=bias) # Decoder from hidden states to x and y
 
-    def loss_fn(self, x, y_hat,y_hat_start=0):
+    def loss_fn(self, x, y_hat):
         y = self(x)
         # Activity loss
         activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
         # print(y_hat[:,:,0].shape, torch.ones(y_hat.size(0),1).shape)
-        y_hat = torch.cat((torch.ones(y_hat.size(0),1,2)*y_hat_start,y_hat),dim=1)
+        y_hat = torch.cat((torch.ones(y_hat.size(0),1,2)*0,y_hat),dim=1)
         # y_hat[:,:,1] = torch.cat((torch.ones(y_hat.size(0),1)*y_hat_start,y_hat[:,:,1]),dim=1)
         y_hat = y_hat.transpose(0,1)
         # Main relative angle diff loss loop, checks difference in position for multiple time steps back in time
@@ -189,6 +189,11 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         j = torch.arange(1, max(self.time_steps//2-int(self.time_steps*0.1),1)).unsqueeze(0)
         mask = i >= j
         j = j * mask
+
+
+
+        # print(i)
+        # print(j)
 
         pred_diffs_x = y[:,i,0] - y[:,i-j,0]
         pred_diffs_y = y[:,i,1] - y[:,i-j,1]
@@ -203,10 +208,13 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
         # mask_dim2 = mask.shape[1]
         # mask_loss_scale = mask_dim2/mask.sum(dim=1).unsqueeze(1)
-        pos_loss_x = torch.mean(((pred_diffs_x-theoretical_diffs_x))**2)
-        pos_loss_y = torch.mean(((pred_diffs_y-theoretical_diffs_y))**2)
+        # pos_loss_x = torch.mean(((pred_diffs_x-theoretical_diffs_x))**2)
+        # pos_loss_y = torch.mean(((pred_diffs_y-theoretical_diffs_y))**2)
+        pos_loss_x = self.loss_func(pred_diffs_x,theoretical_diffs_x)
+        pos_loss_y = self.loss_func(pred_diffs_y,theoretical_diffs_y)
 
         loss = activity_L2 + pos_loss_x + pos_loss_y
+        # print(loss)
         self.losses.append(loss.item())
         return loss
     
