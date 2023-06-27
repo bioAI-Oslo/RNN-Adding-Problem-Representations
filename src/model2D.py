@@ -26,7 +26,7 @@ else:
 torch.set_default_device(device)
 
 class RNN_circular_2D_xy_Low(nn.Module):
-    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__()
         self.input_size = input_size
         # self.time_steps = time_steps
@@ -43,6 +43,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
         self.output = torch.nn.Linear(self.hidden_size,2*self.nav_space,bias=bias) # Decoder from Low et al., 2*nav space since it decodes into cos and sin for every dimension
 
         self.act_decay = act_decay
+        self.weight_decay = weight_decay
         self.batch_size = batch_size
         self.base_training_tsteps = 20
 
@@ -74,8 +75,8 @@ class RNN_circular_2D_xy_Low(nn.Module):
         self.loss_func = torch.nn.MSELoss()
 
         self.lr = lr
-        # self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.01)
-        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=0.01)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
         self.losses = []
         self.accs = []
@@ -102,12 +103,14 @@ class RNN_circular_2D_xy_Low(nn.Module):
 
     def loss_fn(self, x, y_hat):
         y = self(x)[1:,:,:]
+        # Activity loss
+        activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
         y_hat = y_hat.transpose(0,1)
         loss_sin_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
         loss_cos_x = self.loss_func(y[:,:,1],y_hat[:,:,1])
         loss_sin_y = self.loss_func(y[:,:,2],y_hat[:,:,2])
         loss_cos_y = self.loss_func(y[:,:,3],y_hat[:,:,3])
-        loss = loss_sin_x + loss_cos_x + loss_sin_y + loss_cos_y
+        loss = loss_sin_x + loss_cos_x + loss_sin_y + loss_cos_y + activity_L2
         self.losses.append(loss.item())
         return loss
 
