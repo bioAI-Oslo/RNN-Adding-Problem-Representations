@@ -56,7 +56,7 @@ def smooth_wandering_2D(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     data = data.unsqueeze(-1)
     return data, labels
 
-@torch.compile
+# @torch.compile
 def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     # Smooth wandering in 2D with small random pertubation on head direction and velocity
     # Save velocity in x and y direction in data
@@ -96,7 +96,7 @@ def smooth_wandering_2D_complex_bound(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sig
     labels = labels*2*np.pi/(2*bound)
     return data, labels
 
-@torch.compile
+# @torch.compile
 def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
     # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
     # Lower stability will fill the whole square with paths, but the path generation may be more unstable
