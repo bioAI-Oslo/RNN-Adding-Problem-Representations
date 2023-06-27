@@ -96,10 +96,9 @@ class RNN_circular_2D_xy_Low(nn.Module):
             # print(x.shape)
             h = self.act(self.hidden(h) + self.inputx(x[:,t,0,:]) + self.inputy(x[:,t,1,:]))
             self.hts[t+1] = h
-        if raw:
-            return self.hts
-        else:
+        if not raw:
             return self.output(self.hts)
+        return self.hts
 
     def loss_fn(self, x, y_hat):
         y = self(x)[1:,:,:]
