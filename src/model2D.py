@@ -173,11 +173,15 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.output = torch.nn.Linear(self.hidden_size,self.nav_space,bias=bias) # Decoder from hidden states to x and y
+        self.Wx_out_init = self.output.weight.detach().clone()
+
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def loss_fn(self, x, y_hat):
-        y = self(x)
+        y = self(x,raw=True)
         # Activity loss
         activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
+        y = self.output(y)
         # print(y_hat[:,:,0].shape, torch.ones(y_hat.size(0),1).shape)
         y_hat = torch.cat((torch.ones(y_hat.size(0),1,2)*0,y_hat),dim=1)
         # y_hat[:,:,1] = torch.cat((torch.ones(y_hat.size(0),1)*y_hat_start,y_hat[:,:,1]),dim=1)
@@ -189,27 +193,25 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         mask = i >= j
         j = j * mask
 
-
-
         # print(i)
         # print(j)
         pred_diffs_x = y[i,:,0] - y[i-j,:,0]
         pred_diffs_y = y[i,:,1] - y[i-j,:,1]
         # Make the pos diffs that are not supposed to be checked 0
         
-        pred_diffs_x = pred_diffs_x #* mask.unsqueeze(0)
-        pred_diffs_y = pred_diffs_y #* mask.unsqueeze(0)
+        pred_diffs_x = pred_diffs_x * mask.unsqueeze(-1)
+        pred_diffs_y = pred_diffs_y * mask.unsqueeze(-1)
 
         theoretical_diffs_x = y_hat[i,:,0] - y_hat[i-j,:,0]
         theoretical_diffs_y = y_hat[i,:,1] - y_hat[i-j,:,1]
 
         # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
-        # mask_dim2 = mask.shape[1]
-        # mask_loss_scale = mask_dim2/mask.sum(dim=1).unsqueeze(1)
-        # pos_loss_x = torch.mean(((pred_diffs_x-theoretical_diffs_x))**2)
-        # pos_loss_y = torch.mean(((pred_diffs_y-theoretical_diffs_y))**2)
-        pos_loss_x = self.loss_func(pred_diffs_x,theoretical_diffs_x)
-        pos_loss_y = self.loss_func(pred_diffs_y,theoretical_diffs_y)
+        mask_dim2 = mask.shape[1]
+        mask_loss_scale = mask_dim2/mask.sum(dim=1).unsqueeze(1)
+        pos_loss_x = torch.mean(((pred_diffs_x-theoretical_diffs_x)*mask_loss_scale.unsqueeze(-1))**2)
+        pos_loss_y = torch.mean(((pred_diffs_y-theoretical_diffs_y)*mask_loss_scale.unsqueeze(-1))**2)
+        # pos_loss_x = self.loss_func(pred_diffs_x,theoretical_diffs_x)
+        # pos_loss_y = self.loss_func(pred_diffs_y,theoretical_diffs_y)
 
         loss = activity_L2 + pos_loss_x + pos_loss_y
         # print(loss)
