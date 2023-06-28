@@ -27,8 +27,8 @@ else:
 
 torch.set_default_device(device)
 
-# @torch.compile
-def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
+@torch.compile
+def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
     # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
     # Lower stability will fill the whole square with paths, but the path generation may be more unstable
     # v_bound_reduction is the reduction in velocity when hitting a boundry and a lower value here will increase the stability
@@ -182,7 +182,7 @@ def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
     Ag = Agent(Env)
     # Ag.speed_mean = speed_mean
     # Ag.speed_std = speed_std
-    for i in tqdm(range(n_data)):
+    for i in range(n_data):
         for j in range(t_steps): 
             data[i,j] = torch.tensor(Ag.pos)
             labels[i,j] = torch.tensor(Ag.velocity)
@@ -204,7 +204,7 @@ def rat_box_vemund(n_data,t_steps,box_size=1):
     labels = torch.zeros((n_data,t_steps,2))
     data = torch.zeros((n_data,t_steps,2))
 
-    for i in tqdm(range(n_data)):
+    for i in range(n_data):
         gen = trajectory_generator(environment,seq_len=t_steps-1)
         outputs = next(gen)
         labels[i], data[i] = torch.tensor(outputs[0]), torch.tensor(outputs[1])
