@@ -214,7 +214,8 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         # pos_loss_x = self.loss_func(pred_diffs_x,theoretical_diffs_x)
         # pos_loss_y = self.loss_func(pred_diffs_y,theoretical_diffs_y)
 
-        loss = activity_L2 + pos_loss_x + pos_loss_y
+        # start_loss = self.loss_func(y[0,:,:],y_hat[0,:,:])
+        loss = activity_L2 + pos_loss_x + pos_loss_y #+ 0.0001*start_loss
         # print(loss)
         self.losses.append(loss.item())
         return loss
