@@ -193,16 +193,15 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
 
         # print(i)
         # print(j)
-
-        pred_diffs_x = y[:,i,0] - y[:,i-j,0]
-        pred_diffs_y = y[:,i,1] - y[:,i-j,1]
+        pred_diffs_x = y[i,:,0] - y[i-j,:,0]
+        pred_diffs_y = y[i,:,1] - y[i-j,:,1]
         # Make the pos diffs that are not supposed to be checked 0
         
         pred_diffs_x = pred_diffs_x #* mask.unsqueeze(0)
         pred_diffs_y = pred_diffs_y #* mask.unsqueeze(0)
 
-        theoretical_diffs_x = y_hat[:,i,0] - y_hat[:,i-j,0]
-        theoretical_diffs_y = y_hat[:,i,1] - y_hat[:,i-j,1]
+        theoretical_diffs_x = y_hat[i,:,0] - y_hat[i-j,:,0]
+        theoretical_diffs_y = y_hat[i,:,1] - y_hat[i-j,:,1]
 
         # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
         # mask_dim2 = mask.shape[1]
