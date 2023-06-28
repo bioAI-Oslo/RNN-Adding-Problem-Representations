@@ -101,9 +101,10 @@ class RNN_circular_2D_xy_Low(nn.Module):
         return self.hts
 
     def loss_fn(self, x, y_hat):
-        y = self(x)[1:,:,:]
+        y = self(x,raw=True)[1:,:,:]
         # Activity loss
         activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
+        y = self.output(y)
         y_hat = y_hat.transpose(0,1)
         loss_sin_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
         loss_cos_x = self.loss_func(y[:,:,1],y_hat[:,:,1])
