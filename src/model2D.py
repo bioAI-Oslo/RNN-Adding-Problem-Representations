@@ -140,7 +140,6 @@ class RNN_circular_2D_xy_Low(nn.Module):
         plt.ylabel("Loss")
         plt.show()
 
-
     def train(self, epochs=100, loader=None):
         for epoch in tqdm(range(epochs)):
             # data,labels = datagen_circular_pm(self.batch_size,self.base_training_tsteps,sigma=0.05)
@@ -170,6 +169,35 @@ class RNN_circular_2D_xy_Low(nn.Module):
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
 
+class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=bias)
+
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def forward(self, x, raw=False):
+            # Make h0 trainable
+            batch_size_forward = x.size(0)
+            # Encoder for initial hidden state
+            # h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
+            h = self.start_encoder(x[:,0,:,:].squeeze(-1))
+            self.time_steps = x.size(1) - 1 # Minus one because first value is initial position
+            # time_steps+1 because we want to include the initial hidden state
+            self.hts = torch.zeros(self.time_steps+1, batch_size_forward, self.hidden_size)
+            self.hts[0] = h
+            # Main RNN loop
+            for t in range(self.time_steps):
+                # print(x.shape)
+                h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:]))
+                self.hts[t+1] = h
+            if not raw:
+                return self.output(self.hts)
+            return self.hts
+
+
+
+
 class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
@@ -177,6 +205,8 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         self.Wx_out_init = self.output.weight.detach().clone()
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+        
 
     def loss_fn(self, x, y_hat):
         y = self(x,raw=True)

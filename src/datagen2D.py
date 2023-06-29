@@ -125,6 +125,7 @@ def smooth_wandering_2D_squarefix_randomstart(n_data,t_steps,bound=0.5,v_sigma=0
         count += 1
     # print(count)
     # Concatenate the start positions to the data
+    start_positions = start_positions*2*np.pi/(2*bound)
     data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
@@ -148,6 +149,32 @@ def smooth_wandering_2D_circular(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.
     # Bound the labels to be between -bound and bound
     labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
     labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+def smooth_wandering_2D_circular_randomstart(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
+    # Smooth wandering where you come back to other side of bound like pac-man
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save velocity in x and y direction in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_positions = torch.rand((n_data,2))*2*bound-bound
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = velocities*torch.cos(directions)
+    data[:,:,1] = velocities*torch.sin(directions)
+    labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1) + start_positions[:,0].unsqueeze(1)
+    labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1) + start_positions[:,1].unsqueeze(1)
+    # Bound the labels to be between -bound and bound
+    labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
+    labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound
+    # Concatenate the start positions to the data
+    start_positions = start_positions*2*np.pi/(2*bound)
+    data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels

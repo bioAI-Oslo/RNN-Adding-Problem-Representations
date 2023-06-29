@@ -359,9 +359,9 @@ def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, i
         t_test = data.shape[1]
 
     # Append 0,0 to labels
-    labels_old = labels
-    labels = torch.ones(test_batch_size,t_test+1,2)*start
-    labels[:,1:,:] = labels_old
+    # labels_old = labels
+    # labels = torch.ones(test_batch_size,t_test+1,2)*start
+    # labels[:,1:,:] = labels_old
     
     # Get positions from labels
     xs = labels[0:test_batch_size,:,0]
