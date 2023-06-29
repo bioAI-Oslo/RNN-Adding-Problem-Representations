@@ -190,7 +190,8 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         # Main relative angle diff loss loop, checks difference in position for multiple time steps back in time
         i = torch.arange(1, self.time_steps).unsqueeze(1)
         # Check for 40% of the time steps back in time, to reduce the number of comparisons (short term memory)
-        j = torch.arange(1, max(self.time_steps//2-int(self.time_steps*0.1),1)).unsqueeze(0)
+        # j = torch.arange(1, max(self.time_steps//2-int(self.time_steps*0.1),1)).unsqueeze(0)
+        j = torch.arange(1, self.time_steps-1).unsqueeze(0)
         mask = i >= j
         j = j * mask
 
