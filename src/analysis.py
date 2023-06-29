@@ -95,11 +95,18 @@ def plot_tuning_curve(activity,bin_edges,k,spherical=False,linear=False,plot_hea
         plt.show()
 
 def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
+    xcol = np.arange(0,50)
+    ycol = np.arange(0,50)
+
+    xx, yy = np.meshgrid(xcol,ycol)
+    cols = xx + yy
+    cols_flat = cols.flatten()
     if if_pca:
 
         reducer = PCA(n_components=n_components)
         reducer.fit(activity.T)
         embedding = reducer.transform(activity.T)
+        print(embedding.shape)
         # Explained variance
         print(f"Explained variance for PCA with {n_components} components: {100*np.sum(reducer.explained_variance_ratio_):.3f} %")
         if plot and n_components==2:
@@ -108,21 +115,22 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
             plt.title('PCA projection of the activity of the grid cells', fontsize=12)
             plt.show()
         else:
-            fig = px.scatter_3d(embedding, x=0, y=1, z=2)
+            fig = px.scatter_3d(embedding, x=0, y=1, z=2,opacity=0.4,color=cols_flat)
             fig.show()
     else:
         # UMAP
         
-        reducer = umap.UMAP(n_neighbors=500, n_components=2)
+        reducer = umap.UMAP(n_neighbors=500, n_components=n_components)
         reducer.fit(activity.T)
         embedding = reducer.transform(activity.T)
+        print(embedding.shape)
         if plot and n_components==2:
             plt.scatter(embedding[:,0],embedding[:,1],s=10)
             plt.gca().set_aspect('equal', 'datalim')
             plt.title('UMAP projection of the activity of the grid cells', fontsize=12)
             plt.show()
         else:
-            fig = px.scatter_3d(embedding, x=0, y=1, z=2)
+            fig = px.scatter_3d(embedding, x=0, y=1, z=2,opacity=0.4,color=cols_flat)
             fig.show()
 
     return embedding, reducer
