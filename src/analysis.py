@@ -95,8 +95,8 @@ def plot_tuning_curve(activity,bin_edges,k,spherical=False,linear=False,plot_hea
         plt.show()
 
 def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
-    xcol = np.arange(0,50)
-    ycol = np.arange(0,50)
+    xcol = np.arange(0,int(np.sqrt(activity.shape[-1])))
+    ycol = np.arange(0,int(np.sqrt(activity.shape[-1])))
 
     xx, yy = np.meshgrid(xcol,ycol)
     cols = xx + yy
@@ -424,7 +424,7 @@ def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=Fa
 
     # Plot heat map of activity of cell k_test
     plt.figure(figsize=(5,5))
-    plt.imshow(activity[k_test],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k_test]))
+    plt.imshow(activity[k_test],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k_test]),interpolation="bicubic",cmap="jet")
     plt.colorbar()
     plt.title("Heat map of the activity of cell "+str(k_test))
     plt.xlabel(r"Position $x$")
@@ -436,7 +436,7 @@ def plot_2D_tuning_curve_2(activity,xbin_edges,ybin_edges,k_test,scale_to_one=Fa
         fig.set_size_inches(15, 80*plot_head_frac*cell_scaler)
         fig.subplots_adjust(hspace=1,wspace=0.2)
         for k in tqdm(range(int(n_cells*plot_head_frac))):
-            ax[k//4,k%4].imshow(activity[k],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k]))
+            ax[k//4,k%4].imshow(activity[k],extent=[xbin_edges[0],xbin_edges[-1],ybin_edges[0],ybin_edges[-1]],vmin=0,vmax=np.max(activity[k]),interpolation="bicubic",cmap="jet")
             ax[k//4,k%4].set_title("Cell "+str(k))
             ax[k//4,k%4].set_xlabel(r"Position $x$")
             ax[k//4,k%4].set_ylabel(r"Position $y$")
