@@ -172,7 +172,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
 class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
-        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=bias)
+        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -196,8 +196,6 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
             return self.hts
 
 
-
-
 class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
@@ -205,8 +203,6 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         self.Wx_out_init = self.output.weight.detach().clone()
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-
-        
 
     def loss_fn(self, x, y_hat):
         y = self(x,raw=True)
@@ -219,7 +215,7 @@ class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
         y_hat = y_hat.transpose(0,1)
         # Main relative angle diff loss loop, checks difference in position for multiple time steps back in time
         i = torch.arange(1, self.time_steps).unsqueeze(1)
-        # Check for 40% of the time steps back in time, to reduce the number of comparisons (short term memory)
+        # # Check for 40% of the time steps back in time, to reduce the number of comparisons (short term memory)
         # j = torch.arange(1, max(self.time_steps//2-int(self.time_steps*0.1),1)).unsqueeze(0)
         j = torch.arange(1, self.time_steps-1).unsqueeze(0)
         mask = i >= j
