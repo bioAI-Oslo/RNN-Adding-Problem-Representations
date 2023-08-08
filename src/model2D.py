@@ -194,6 +194,71 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
             if not raw:
                 return self.output(self.hts)
             return self.hts
+    
+class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randomstart):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+
+        self.noise = noise
+        self.output = torch.nn.Linear(self.hidden_size,self.nav_space,bias=bias)
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def forward(self, x, raw=False):
+            # Make h0 trainable
+            batch_size_forward = x.size(0)
+            # Encoder for initial hidden state
+            # h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
+            h = self.start_encoder(x[:,0,:,:].squeeze(-1))
+            self.time_steps = x.size(1) - 1 # Minus one because first value is initial position
+            # time_steps+1 because we want to include the initial hidden state
+            self.hts = torch.zeros(self.time_steps+1, batch_size_forward, self.hidden_size)
+            self.hts[0] = h
+            # Main RNN loop
+            for t in range(self.time_steps):
+                # print(x.shape)
+                h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
+                self.hts[t+1] = h
+            if not raw:
+                return self.output(self.hts)
+            return self.hts
+    
+    def loss_fn(self, x, y_hat):
+        y = self(x,raw=True)[1:,:,:]
+        # Activity loss
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
+        y = self.output(y)
+        y_hat = y_hat.transpose(0,1)
+        loss_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
+        loss_y = self.loss_func(y[:,:,1],y_hat[:,:,1])
+        loss = loss_x + loss_y + activity_L2
+        self.losses.append(loss.item())
+        return loss
+    
+    def train(self, epochs=100, loader=None):
+        for epoch in tqdm(range(epochs)):
+            # data,labels = datagen_circular_pm(self.batch_size,self.base_training_tsteps,sigma=0.05)
+            data,labels = smooth_wandering_2D_squarefix_randomstart_hdv(self.batch_size,self.base_training_tsteps)
+            loss = self.train_step(data.to(device),labels.to(device))
+        return self.losses
+    
+    def train_gradual(self, epochs=100, loader=None):
+        i = 0
+        training_steps = 1
+        for epoch in tqdm(range(epochs)):
+            if i%15 == 0:
+                training_steps += 1
+            data,labels = smooth_wandering_2D_squarefix_randomstart_hdv(self.batch_size,training_steps)
+            loss = self.train_step(data.to(device),labels.to(device))
+            i+=1
+        print("Last training time steps:",training_steps)
+        return self.losses
+    
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        for i in tqdm(range(len(input))):
+            data = input[i][0]
+            labels = input[i][1]
+            loss = self.train_step(data.to(device),labels.to(device))
 
 
 class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):

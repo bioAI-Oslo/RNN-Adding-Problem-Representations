@@ -74,6 +74,53 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=
     return data, labels
 
 @torch.compile
+def smooth_wandering_2D_squarefix_hdv(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
+    # Data is headdirection, speed
+    # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
+    # Lower stability will fill the whole square with paths, but the path generation may be more unstable
+    # v_bound_reduction is the reduction in velocity when hitting a boundry and a lower value here will increase the stability
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save head direction and speed in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = torch.remainder(directions,2*np.pi)
+    data[:,:,1] = velocities
+    labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1)
+    labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1)
+    bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+    count = 0
+    while bound_mask.any():
+        # Extract the first True in each row
+        bound_mask_first_true = torch.zeros_like(bound_mask)
+        first_true = torch.argmax(bound_mask.int(), dim=1)
+        bound_mask_first_true[range(bound_mask.shape[0]), first_true] = True
+        # Make sure if there is no True in a row, the first_true is False
+        bound_mask_first_true = torch.logical_and(bound_mask, bound_mask_first_true)
+        bound_mask[range(bound_mask.shape[0]), first_true] = False
+        # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
+        velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction*0.999**count # torch.rand((bound_mask_first_true.sum(),))*v_sigma
+        velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
+        # For the first timestep redraw for each trajectory the direction changes by 90 degrees
+        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*(stability)+1) # + torch.randn((bound_mask_first_true.sum(),))*np.pi*d_sigma
+        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
+        directions = torch.cumsum(direction_pert,dim=1)+start_directions
+        data[:,:,0] = torch.remainder(directions,2*np.pi)
+        data[:,:,1] = velocities
+        labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1)
+        labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1)
+        bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+        count += 1
+    # print(count)
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+@torch.compile
 def smooth_wandering_2D_squarefix_randomstart(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
     # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
     # Lower stability will fill the whole square with paths, but the path generation may be more unstable
@@ -131,6 +178,65 @@ def smooth_wandering_2D_squarefix_randomstart(n_data,t_steps,bound=0.5,v_sigma=0
     labels = labels*2*np.pi/(2*bound)
     return data, labels
 
+@torch.compile
+def smooth_wandering_2D_squarefix_randomstart_hdv(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
+    # Data is headdirection, speed
+    # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
+    # Lower stability will fill the whole square with paths, but the path generation may be more unstable
+    # v_bound_reduction is the reduction in velocity when hitting a boundry and a lower value here will increase the stability
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save head direction and speed in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_positions = torch.rand(n_data,2)*2*bound-bound
+    # Draw start directions such that they are not pointing towards the boundry
+    # Where start positions is in for example first quadrant, draw start directions in between pi and 3pi/2
+    start_directions = torch.rand(n_data)
+    # start_directions = torch.where(torch.logical_and(start_positions[:,0] < 0, start_positions[:,1] > 0), start_directions+np.pi/2, start_directions)
+    start_directions = start_directions.unsqueeze(1)
+    # start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = torch.remainder(directions,2*np.pi)
+    data[:,:,1] = velocities
+    labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1) + start_positions[:,0].unsqueeze(1)
+    labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1) + start_positions[:,1].unsqueeze(1)
+    bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+    count = 0
+    while bound_mask.any():
+        # Extract the first True in each row
+        bound_mask_first_true = torch.zeros_like(bound_mask)
+        # First true is the index of the first True in each row if there is one, else it is False
+        first_true = torch.argmax(bound_mask.int(), dim=1)
+        bound_mask_first_true[range(bound_mask.shape[0]), first_true] = True
+        # Make sure if there is no True in a row, the first_true is False
+        bound_mask_first_true = torch.logical_and(bound_mask, bound_mask_first_true)
+        bound_mask[range(bound_mask.shape[0]), first_true] = False
+        # Check if only one is True in each row
+        # print(bound_mask_first_true.sum(dim=1) == 1)
+        # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
+        velocities[bound_mask_first_true] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask_first_true.sum(),)))*v_bound_reduction*0.999**count # torch.rand((bound_mask_first_true.sum(),))*v_sigma
+        velocities[bound_mask] = torch.tensor(np.random.rayleigh(v_sigma, (bound_mask.sum(),))) # torch.rand((bound_mask.sum(),))*v_sigma
+        # For the first timestep redraw for each trajectory the direction changes by 90 degrees
+        direction_pert[bound_mask_first_true] = np.pi/2*int(np.sign(np.random.randint(0,2,(1,1))-0.5))*(torch.randn(1)*(stability)+1)
+        direction_pert[bound_mask] = torch.randn((bound_mask.sum(),))*np.pi*d_sigma
+        directions = torch.cumsum(direction_pert,dim=1)+start_directions
+        data[:,:,0] = torch.remainder(directions,2*np.pi)
+        data[:,:,1] = velocities
+        labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1) + start_positions[:,0].unsqueeze(1)
+        labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1) + start_positions[:,1].unsqueeze(1)
+        bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
+        count += 1
+    # print(count)
+    # Concatenate the start positions to the data
+    start_positions = start_positions*2*np.pi/(2*bound)
+    data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
 def smooth_wandering_2D_circular(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     # Smooth wandering where you come back to other side of bound like pac-man
     # Smooth wandering in 2D with small random pertubation on head direction and velocity
@@ -146,6 +252,28 @@ def smooth_wandering_2D_circular(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.
     data[:,:,1] = velocities*torch.sin(directions)
     labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1)
     labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1)
+    # Bound the labels to be between -bound and bound
+    labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
+    labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+def smooth_wandering_2D_circular_hdv(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
+    # Smooth wandering where you come back to other side of bound like pac-man
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save head direction and speed in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = torch.reminder(directions,2*np.pi)
+    data[:,:,1] = velocities
+    labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1)
+    labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1)
     # Bound the labels to be between -bound and bound
     labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
     labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound
@@ -169,6 +297,32 @@ def smooth_wandering_2D_circular_randomstart(n_data,t_steps,bound=0.5,v_sigma=0.
     data[:,:,1] = velocities*torch.sin(directions)
     labels[:,:,0] = torch.cumsum(data[:,:,0],dim=1) + start_positions[:,0].unsqueeze(1)
     labels[:,:,1] = torch.cumsum(data[:,:,1],dim=1) + start_positions[:,1].unsqueeze(1)
+    # Bound the labels to be between -bound and bound
+    labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
+    labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound
+    # Concatenate the start positions to the data
+    start_positions = start_positions*2*np.pi/(2*bound)
+    data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
+    data = data.unsqueeze(-1)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+def smooth_wandering_2D_circular_randomstart_hdv(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
+    # Smooth wandering where you come back to other side of bound like pac-man
+    # Smooth wandering in 2D with small random pertubation on head direction and velocity
+    # Save heading direction and velocity in data
+    data = torch.zeros((n_data, t_steps, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_positions = torch.rand((n_data,2))*2*bound-bound
+    start_directions = torch.rand(n_data).unsqueeze(1)*2*np.pi
+    velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
+    direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
+    directions = torch.cumsum(direction_pert,dim=1)+start_directions
+    data[:,:,0] = torch.remainder(directions,2*np.pi)
+    data[:,:,1] = velocities
+    labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1) + start_positions[:,0].unsqueeze(1)
+    labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1) + start_positions[:,1].unsqueeze(1)
     # Bound the labels to be between -bound and bound
     labels[:,:,0] = torch.remainder(labels[:,:,0]+bound,2*bound)-bound
     labels[:,:,1] = torch.remainder(labels[:,:,1]+bound,2*bound)-bound

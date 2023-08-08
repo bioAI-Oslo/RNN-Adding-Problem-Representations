@@ -94,7 +94,7 @@ def plot_tuning_curve(activity,bin_edges,k,spherical=False,linear=False,plot_hea
             ax[k//4,k%4].set_title("Cell "+str(k))
         plt.show()
 
-def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
+def lowD_reduce(activity,if_pca=True,n_components=2,plot=True,n_neighbors=500):
     xcol = np.arange(0,int(np.sqrt(activity.shape[-1])))
     ycol = np.arange(0,int(np.sqrt(activity.shape[-1])))
 
@@ -120,7 +120,7 @@ def lowD_reduce(activity,if_pca=True,n_components=2,plot=True):
     else:
         # UMAP
         
-        reducer = umap.UMAP(n_neighbors=500, n_components=n_components)
+        reducer = umap.UMAP(n_neighbors=n_neighbors, n_components=n_components)
         reducer.fit(activity.T)
         embedding = reducer.transform(activity.T)
         print(embedding.shape)
