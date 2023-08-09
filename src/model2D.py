@@ -119,7 +119,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
         # Backward hook to clip gradients
         loss = self.loss_fn(x, y_hat)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0) # Clip gradients as in paper Low et al.
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 2.0) # Clip gradients as in paper Low et al.
         self.optimizer.step()
         # Print weight gradient norms
         # print("Hidden weight grad norm:",torch.norm(self.hidden.weight.grad))
