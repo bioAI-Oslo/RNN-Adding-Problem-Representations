@@ -170,9 +170,10 @@ class RNN_circular_2D_xy_Low(nn.Module):
             loss = self.train_step(data.to(device),labels.to(device))
 
 class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
-    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
+        self.noise = noise
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -189,11 +190,26 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
             # Main RNN loop
             for t in range(self.time_steps):
                 # print(x.shape)
-                h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:]))
+                h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
                 self.hts[t+1] = h
             if not raw:
                 return self.output(self.hts)
             return self.hts
+    
+    def loss_fn(self, x, y_hat):
+        y = self(x,raw=True)[1:,:,:]
+        # Activity loss
+        # activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
+        y = self.output(y)
+        y_hat = y_hat.transpose(0,1)
+        loss_sin_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
+        loss_cos_x = self.loss_func(y[:,:,1],y_hat[:,:,1])
+        loss_sin_y = self.loss_func(y[:,:,2],y_hat[:,:,2])
+        loss_cos_y = self.loss_func(y[:,:,3],y_hat[:,:,3])
+        loss = loss_sin_x + loss_cos_x + loss_sin_y + loss_cos_y + activity_L2
+        self.losses.append(loss.item())
+        return loss
     
 class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randomstart):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
