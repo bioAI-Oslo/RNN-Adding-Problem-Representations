@@ -304,9 +304,9 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
         
         # Concatenate the start pos to y_hat to make it the same size as y
-        y_hat = torch.cat((x[:,0,:,:],y_hat),dim=1)
+        y_hat = torch.cat((x[:,0,:,:].squeeze().unsqueeze(1),y_hat),dim=1)
         # Permute y_hat to make it the same shape as y
-        y_hat = y_hat.permute(1,0)
+        y_hat = torch.permute(y_hat,(1,0,2))
 
         h_x = y[:,:,:self.hidden_size//2]
         h_y = y[:,:,self.hidden_size//2:]
@@ -314,7 +314,7 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         # Main angle loss loop, checks difference in angles for multiple time steps back in time
         i = torch.arange(1, self.time_steps).unsqueeze(1)
         # Check for 40% of the time steps back in time, to avoid angles beeing too large (above pi) for acos so that they become ambiguous (acos pi-0.1 = acos pi+0.1)
-        j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
+        j = torch.arange(1, max(1,self.time_steps//2-int(self.time_steps*0.1))).unsqueeze(0)
         # THIS IS VERY UNCERTAIN, TRY >= AND >
         mask = i >= j
         j = j * mask
@@ -356,7 +356,7 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         # circle_end_loss = 0.0001*torch.mean((y[-1]-y[0])**2)
 
         self.losses.append(angle_loss_x.item() + angle_loss_y.item())
-        self.losses_norm.append(activity_L2.item())
+        # self.losses_norm.append(activity_L2.item())
         # self.losses_circle.append(circle_end_loss.item())
         loss = angle_loss_x + angle_loss_y + activity_L2 # + circle_end_loss
         return loss
