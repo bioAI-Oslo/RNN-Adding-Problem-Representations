@@ -466,3 +466,38 @@ def sincos_to_2D(labels):
     for i in range(labels.shape[2]//2):
         labels_new[:,:,i] = torch.atan2(labels[:,:,2*i],labels[:,:,2*i+1])
     return labels_new
+
+def hd_direction_input_convert(input):
+    input_data = input.copy()
+    for i in range(len(input_data)):
+        path = input_data[i,1][:,:,:]
+        data = input_data[i,0][:,:,:].squeeze()
+        p0 = data[:,0,:]
+        hd = data[:,1:,0]
+        dist_vec = path - p0.unsqueeze(1)
+        dist = torch.norm(dist_vec, dim=2, keepdim=True)
+        dist_angle = torch.atan2(dist_vec[:,:,1], dist_vec[:,:,0])
+        rel_angle = torch.minimum(torch.remainder(dist_angle - hd, 2*np.pi), torch.remainder(hd - dist_angle, 2*np.pi))
+        # To make angle direction unique
+        flip = torch.isclose(rel_angle,torch.remainder(dist_angle - hd, 2*np.pi))
+        rel_angle = torch.where(flip, -rel_angle, rel_angle)
+        input_data[i,1][:,:,0] = rel_angle
+        input_data[i,1][:,:,1] = dist.squeeze(-1)
+    return input_data
+
+def hd_direction_input_convert_partial(data,labels):
+    labels_new = labels.clone()
+    path = labels_new
+    data = data.squeeze()
+    p0 = data[:,0,:]
+    hd = data[:,1:,0]
+    dist_vec = path - p0.unsqueeze(1)
+    dist = torch.norm(dist_vec, dim=2, keepdim=True)
+    dist_angle = torch.atan2(dist_vec[:,:,1], dist_vec[:,:,0])
+    rel_angle = torch.minimum(torch.remainder(dist_angle - hd, 2*np.pi), torch.remainder(hd - dist_angle, 2*np.pi))
+    # To make angle direction unique
+    flip = torch.isclose(rel_angle,torch.remainder(dist_angle - hd, 2*np.pi))
+    rel_angle = torch.where(flip, -rel_angle, rel_angle)
+    labels_new[:,:,0] = rel_angle
+    labels_new[:,:,1] = dist.squeeze(-1)
+    return data.unsqueeze(-1),labels_new

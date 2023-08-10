@@ -59,7 +59,8 @@ class RNN_circular_2D_xy_Low(nn.Module):
             torch.nn.init.eye_(self.hidden.weight)
             if bias:
                 # torch.nn.init.constant_(self.hidden.bias, 0)
-                torch.nn.init.constant_(self.input.bias, 0)
+                torch.nn.init.constant_(self.inputx.bias, 0)
+                torch.nn.init.constant_(self.inputx.bias, 0)
 
         if Wx_normalize:
         # Set norm of input weights to 1
@@ -212,7 +213,7 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
         return loss
     
 class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randomstart):
-    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.05,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
 
         self.noise = noise
@@ -275,6 +276,91 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
             data = input[i][0]
             labels = input[i][1]
             loss = self.train_step(data.to(device),labels.to(device))
+
+class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.05,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+
+    def forward(self, x, raw=False):
+        # Make h0 trainable
+        batch_size_forward = x.size(0)
+        # Encoder for initial hidden state
+        # h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
+        h = self.start_encoder(x[:,0,:,:].squeeze(-1))
+        self.time_steps = x.size(1) - 1 # Minus one because first value is initial position
+        # time_steps+1 because we want to include the initial hidden state
+        self.hts = torch.zeros(self.time_steps+1, batch_size_forward, self.hidden_size)
+        self.hts[0] = h
+        # Main RNN loop
+        for t in range(self.time_steps):
+            # print(x.shape)
+            h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
+            self.hts[t+1] = h
+        return self.hts
+
+    def loss_fn(self, x, y_hat):
+        y = self(x)
+        # Activity regularization L2
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
+        
+        # Concatenate the start pos to y_hat to make it the same size as y
+        y_hat = torch.cat((x[:,0,:,:],y_hat),dim=1)
+        # Permute y_hat to make it the same shape as y
+        y_hat = y_hat.permute(1,0)
+
+        h_x = y[:,:,:self.hidden_size//2]
+        h_y = y[:,:,self.hidden_size//2:]
+        
+        # Main angle loss loop, checks difference in angles for multiple time steps back in time
+        i = torch.arange(1, self.time_steps).unsqueeze(1)
+        # Check for 40% of the time steps back in time, to avoid angles beeing too large (above pi) for acos so that they become ambiguous (acos pi-0.1 = acos pi+0.1)
+        j = torch.arange(1, self.time_steps//2-int(self.time_steps*0.1)).unsqueeze(0)
+        # THIS IS VERY UNCERTAIN, TRY >= AND >
+        mask = i >= j
+        j = j * mask
+        # i = i * mask
+        
+        ### For x
+        normalizer_x = 1 / (torch.norm(h_x[i], dim=-1) * torch.norm(h_x[i-j], dim=-1))
+        # Cant clamp between -1 and 1 because it will cause NaNs in training
+        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.9999999, 0.9999999)))
+        # Make the angles that are not supposed to be checked 0
+        angle_test_x = angle_test_x * mask.unsqueeze(-1)
+        # Must use torch.abs because the angle can be negative, but the angle_test_x only returns positive angles
+        angle_theoretical_x = torch.abs(y_hat[i,:,0]-y_hat[i-j,:,0])
+        # Make 0 and 2pi the same angle
+
+        # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
+        mask_dim2_x = mask.shape[1]
+        mask_loss_scale_x = mask_dim2_x/mask.sum(dim=1).unsqueeze(1)
+        angle_loss_x = torch.mean(((angle_test_x-angle_theoretical_x)*mask_loss_scale_x.unsqueeze(-1))**2)
+        # angle_loss = torch.mean(((angle_test-angle_theoretical))**2)
+
+        ### For y
+        normalizer_y = 1 / (torch.norm(h_y[i], dim=-1) * torch.norm(h_y[i-j], dim=-1))
+        # Cant clamp between -1 and 1 because it will cause NaNs in training
+        angle_test_y = torch.abs(torch.acos(torch.clamp(torch.sum(h_y[i]*h_y[i-j], dim=-1) * normalizer_y, -0.9999999, 0.9999999)))
+        # Make the angles that are not supposed to be checked 0
+        angle_test_y = angle_test_y * mask.unsqueeze(-1)
+        # Must use torch.abs because the angle can be negative, but the angle_test_y only returns positive angles
+        angle_theoretical_y = torch.abs(y_hat[i,:,0]-y_hat[i-j,:,0])
+        # Make 0 and 2pi the same angle
+        # angle_theoretical = torch.min(torch.remainder(2*np.pi-(y_hat[i]-y_hat[i-j]),2*np.pi),torch.remainder(2*np.pi-(y_hat[i-j]-y_hat[i]),2*np.pi))
+
+        # Scale the loss so that the latter time steps dont have a larger loss than the earlier time steps
+        mask_dim2_y = mask.shape[1]
+        mask_loss_scale_y = mask_dim2_y/mask.sum(dim=1).unsqueeze(1)
+        angle_loss_y = torch.mean(((angle_test_y-angle_theoretical_y)*mask_loss_scale_y.unsqueeze(-1))**2)
+
+        # Loss to end in the same position as the start
+        # circle_end_loss = 0.0001*torch.mean((y[-1]-y[0])**2)
+
+        self.losses.append(angle_loss_x.item() + angle_loss_y.item())
+        self.losses_norm.append(activity_L2.item())
+        # self.losses_circle.append(circle_end_loss.item())
+        loss = angle_loss_x + angle_loss_y + activity_L2 # + circle_end_loss
+        return loss
+
 
 
 class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
