@@ -2,10 +2,11 @@ numpy
 matplotlib
 umap-learn
 scikit-learn
-pandas
 torch
 torchvision
 torchaudio
 tqdm
-pandas
 ipykernel
+Sophia-Optimizer
+ratinabox
+plotly
