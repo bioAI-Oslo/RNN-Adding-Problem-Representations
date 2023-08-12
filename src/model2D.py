@@ -207,11 +207,16 @@ class RNN_circular_2D_xy_Low(nn.Module):
     
     def train_gradual_manual(self,input):
         # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
-        for i in tqdm(range(len(input))):
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
             data = input[i][0]
             labels = input[i][1]
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
+
+            
+            
 
 class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
@@ -747,11 +752,13 @@ class CwRNN_low(CwRNN):
     
     def train_gradual_manual(self,input):
         # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
-        for i in tqdm(range(len(input))):
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
             data = input[i][0]
             labels = input[i][1]
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
 class LSTM_solver(RNN_circular_2D_randomstart_trivial_sorcher):
     def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
@@ -813,11 +820,13 @@ class LSTM_solver_Low(LSTM_solver):
     
     def train_gradual_manual(self,input):
         # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
-        for i in tqdm(range(len(input))):
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
             data = input[i][0]
             labels = input[i][1]
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
 class LTC_solver(LSTM_solver):
     def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
@@ -862,32 +871,30 @@ class LTC_solver(LSTM_solver):
                 return np.array(x_out).transpose(1, 0, 2)
         return self.hts
     
-class LTC_solver_v2(LSTM_solver):
-    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
-        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
-        self.output_size = output_size
-        wiring = AutoNCP(self.hidden_size, self.output_size)
-        self.ltc = LTC(self.input_size,wiring,batch_first=True)
+class LTC_solver_Low(LTC_solver):
+    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
 
-        # self.optimizer = SophiaG(self.parameters(), lr=lr, weight_decay=weight_decay)
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
-
-    def forward(self, x, raw=False):
-        x = x.squeeze(-1)
-        h0 = self.start_encoder(x[:,0,:])
-        out, hx = self.ltc(x[:,1:,:],hx=h0)
-        if not raw:
-            return out
-        return hx
-    
     def loss_fn(self, x, y_hat):
-        # y = self(x,raw=True)[1:,:,:]
+        hts = self(x,raw=True)
         # Activity loss
-        # activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
-        y = self(x)
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(hts**2).sum()
+        y = self(x,raw=False)
         # y_hat = y_hat.transpose(0,1)
-        loss_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
-        loss_y = self.loss_func(y[:,:,1],y_hat[:,:,1])
-        loss = loss_x + loss_y
+        loss_sin_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
+        loss_cos_x = self.loss_func(y[:,:,1],y_hat[:,:,1])
+        loss_sin_y = self.loss_func(y[:,:,2],y_hat[:,:,2])
+        loss_cos_y = self.loss_func(y[:,:,3],y_hat[:,:,3])
+        loss = loss_sin_x + loss_cos_x + loss_sin_y + loss_cos_y + activity_L2
         self.losses.append(loss.item())
         return loss
+    
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
+            data = input[i][0]
+            labels = input[i][1]
+            labels = sincos_from_2D(labels)
+            loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
