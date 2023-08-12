@@ -374,8 +374,8 @@ def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, i
         ys = ys.cpu().detach().numpy().T
 
     # Get the hidden states inferenced from the test data
-    hts = model(data,raw=True)
-    hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    hts = model(data,raw=True,inference=True)
+    # hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
     n_cells = hts.shape[2]
     
     import scipy.stats as stats
