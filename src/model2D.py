@@ -12,8 +12,8 @@ from torch.autograd import Variable, functional
 import torch.optim as optim
 
 # Liquid Neural Networks
-from ncps.wirings import AutoNCP
-from ncps.torch import LTC, LTCCell
+from ncps.wirings import AutoNCP, FullyConnected
+from ncps.torch import LTC, LTCCell, CfCCell, WiredCfCCell
 
 import pytorch_lightning as pl
 from Sophia import SophiaG
@@ -122,7 +122,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
         self.losses = []
         self.accs = []
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
         # Make h0 trainable
         batch_size_forward = x.size(0)
         h = torch.zeros((batch_size_forward,self.hidden_size)) # Gives constant initial hidden state
@@ -137,9 +137,14 @@ class RNN_circular_2D_xy_Low(nn.Module):
             # print(x.shape)
             h = self.act(self.hidden(h) + self.inputx(x[:,t,0,:]) + self.inputy(x[:,t,1,:]))
             self.hts[t+1] = h
-        if not raw:
-            return self.output(self.hts)
-        return self.hts
+        if not inference:
+            if not raw:
+                return self.output(self.hts)
+            return self.hts
+        else:
+            if not raw:
+                return self.output(self.hts).cpu().detach().numpy()
+            return self.hts.cpu().detach().numpy()
 
     def loss_fn(self, x, y_hat):
         y = self(x,raw=True)[1:,:,:]
@@ -176,9 +181,8 @@ class RNN_circular_2D_xy_Low(nn.Module):
                 print("Losses array was not a multiple of average. Truncated to",len(losses))
             loss_data_avgd = losses.reshape(average,-1).mean(axis=1)
             plt.plot(loss_data_avgd[3:])
-        # Lim to average*10 to remove the first few spikes
-        average_total = losses.mean()
-        plt.ylim(0,min(loss_data_avgd.max()*1.1,10))
+        # Lim to remove the first few spikes
+        plt.ylim(0,min(loss_data_avgd.max()*1.1,4))
         plt.title("MSE Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
@@ -226,7 +230,7 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
             # Make h0 trainable
             batch_size_forward = x.size(0)
             # Encoder for initial hidden state
@@ -241,9 +245,14 @@ class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
                 # print(x.shape)
                 h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
                 self.hts[t+1] = h
-            if not raw:
-                return self.output(self.hts)
-            return self.hts
+            if not inference:
+                if not raw:
+                    return self.output(self.hts)
+                return self.hts
+            else:
+                if not raw:
+                    return self.output(self.hts).cpu().detach().numpy()
+                return self.hts.cpu().detach().numpy()
     
     def loss_fn(self, x, y_hat):
         y = self(x,raw=True)[1:,:,:]
@@ -268,7 +277,7 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
         self.output = torch.nn.Linear(self.hidden_size,self.nav_space,bias=bias)
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
             # Make h0 trainable
             batch_size_forward = x.size(0)
             # Encoder for initial hidden state
@@ -283,9 +292,14 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
                 # print(x.shape)
                 h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
                 self.hts[t+1] = h
-            if not raw:
-                return self.output(self.hts)
-            return self.hts
+            if not inference:
+                if not raw:
+                    return self.output(self.hts)
+                return self.hts
+            else:
+                if not raw:
+                    return self.output(self.hts).cpu().detach().numpy()
+                return self.hts.cpu().detach().numpy()
     
     def loss_fn(self, x, y_hat):
         y = self(x,raw=True)[1:,:,:]
@@ -338,7 +352,7 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.05,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
         # Make h0 trainable
         batch_size_forward = x.size(0)
         # Encoder for initial hidden state
@@ -353,7 +367,10 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
             # print(x.shape)
             h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:])) + torch.normal(0,self.noise,(batch_size_forward,self.hidden_size)).to(device)
             self.hts[t+1] = h
-        return self.hts
+        if not inference:
+            return self.hts
+        else:
+            return self.hts.cpu().detach().numpy()
 
     def loss_fn(self, x, y_hat):
         y = self(x)
@@ -581,7 +598,7 @@ class RNN_circular_2D_xy_relative_randomstart(RNN_circular_2D_xy_relative):
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
             # Make h0 trainable
             batch_size_forward = x.size(0)
             # Encoder for initial hidden state
@@ -596,9 +613,14 @@ class RNN_circular_2D_xy_relative_randomstart(RNN_circular_2D_xy_relative):
                 # print(x.shape)
                 h = self.act(self.hidden(h) + self.inputx(x[:,t+1,0,:]) + self.inputy(x[:,t+1,1,:]))
                 self.hts[t+1] = h
-            if not raw:
-                return self.output(self.hts)
-            return self.hts
+            if not inference:
+                if not raw:
+                    return self.output(self.hts)
+                return self.hts
+            else:
+                if not raw:
+                    return self.output(self.hts).cpu().detach().numpy()
+                return self.hts.cpu().detach().numpy()
     
 
 class CwRNN(nn.Module):
@@ -660,7 +682,7 @@ class CwRNN(nn.Module):
 
         return hidden_out
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
         b, t, _ = x[:,1:,:,:].squeeze(-1).shape
         # hidden = torch.zeros(b, self.hidden_size).to(device)  # default to zeros
         hidden = self.start_encoder(x[:,0,:,:].squeeze(-1)).to(device)
@@ -677,9 +699,14 @@ class CwRNN(nn.Module):
         # output shape (batch_size, seq_len, input_size)
         self.time_steps = t
         self.batch_size = b
-        if not raw:
-            return torch.stack(x_out, dim=0).permute(1, 0, 2)
-        return self.hts
+        if not inference:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2)
+            return self.hts
+        else:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2).cpu().detach().numpy()
+            return self.hts.cpu().detach().numpy()
     
     def loss_fn(self, x, y_hat):
         hts = self(x,raw=True)
@@ -715,7 +742,7 @@ class CwRNN(nn.Module):
             loss_data_avgd = losses.reshape(average,-1).mean(axis=1)
             plt.plot(loss_data_avgd[3:])
         average_total = losses.mean()
-        plt.ylim(0,min(loss_data_avgd.max()*1.1,10))
+        plt.ylim(0,min(loss_data_avgd.max()*1.1,4))
         plt.title("MSE Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
@@ -763,14 +790,15 @@ class CwRNN_low(CwRNN):
 class LSTM_solver(RNN_circular_2D_randomstart_trivial_sorcher):
     def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,noise=0,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.output_size = output_size
         self.lstm = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
 
         self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
-        self.fc = nn.Linear(self.hidden_size, output_size)
+        self.fc = nn.Linear(self.hidden_size, self.output_size)
 
         self.optimizer = SophiaG(self.parameters(), lr=lr, weight_decay=weight_decay)
 
-    def forward(self, x, raw=False):
+    def forward(self, x, raw=False,inference=False):
         x = x.squeeze(-1)
         b, t, _ = x[:,1:,:].shape
         # hidden = torch.zeros(b, self.hidden_size)  # default to zeros
@@ -793,9 +821,14 @@ class LSTM_solver(RNN_circular_2D_randomstart_trivial_sorcher):
         # output shape (batch_size, seq_len, input_size)
         self.time_steps = t
         self.batch_size = b
-        if not raw:
-            return torch.stack(x_out, dim=0).permute(1, 0, 2)
-        return self.hts
+        if not inference:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2)
+            return self.hts
+        else:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2).cpu().detach().numpy()
+            return self.hts.cpu().detach().numpy()
     
 class LSTM_solver_Low(LSTM_solver):
     def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
@@ -829,15 +862,19 @@ class LSTM_solver_Low(LSTM_solver):
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
 class LTC_solver(LSTM_solver):
-    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2, if_lstm=False):
-        super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
-        self.output_size = output_size
-        wiring = AutoNCP(self.hidden_size, self.output_size)
-        self.ltc = LTCCell(wiring,self.input_size)
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2, if_lstm=False, if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.if_wiring = if_wiring
+        if self.if_wiring:
+            self.wiring = AutoNCP(self.hidden_size, self.output_size)
+        else:
+            self.wiring = FullyConnected(self.hidden_size, output_dim=self.output_size)
+        self.ltc = LTCCell(self.wiring,self.input_size)
         self.if_lstm = if_lstm
         if self.if_lstm:
             self.lstm_cell = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
             self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
+        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
 
         self.optimizer = SophiaG(self.parameters(), lr=lr, weight_decay=weight_decay)
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
@@ -848,7 +885,17 @@ class LTC_solver(LSTM_solver):
         hidden = self.start_encoder(x[:,0,:])
         cell = self.c_encoder(x[:,0,:])
         x_out = []
-        if inference:
+        if not inference:
+            self.hts = torch.zeros(t+1, b, self.hidden_size)
+            self.hts[0] = hidden
+            for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
+                y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
+                hidden = hx
+                self.hts[i+1] = hx
+                x_out.append(y) # (batch_size, output_size)    
+        else:
             self.hts = np.zeros((t+1, b, self.hidden_size))
             self.hts[0] = hidden.cpu().detach().numpy()
             for i in range(t):
@@ -858,16 +905,48 @@ class LTC_solver(LSTM_solver):
                 hidden = hx
                 self.hts[i+1] = hx.cpu().detach().numpy()
                 x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
+
+        self.time_steps = t
+        self.batch_size = b
+        # output shape (batch_size, seq_len, input_size)
+        if not inference:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2)
         else:
+            if not raw:
+                return np.array(x_out).transpose(1, 0, 2)
+        return self.hts
+    
+class LTC_solver_0start(LTC_solver):
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False,if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm,if_wiring=if_wiring)
+
+    def forward(self, x, raw=False, inference=False):
+        x = x.squeeze(-1)
+        b, t, _ = x[:,:,:].shape
+        hidden = torch.zeros(b, self.hidden_size)  # default to zeros
+        cell = torch.zeros(b, self.hidden_size)  # default to zeros
+        x_out = []
+        if not inference:
             self.hts = torch.zeros(t+1, b, self.hidden_size)
             self.hts[0] = hidden
             for i in range(t):
                 if self.if_lstm:
-                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
-                y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
+                    hx, cx = self.lstm_cell(x[:, i,:], (hidden,cell))
+                y, hx = self.ltc(x[:, i,:], hidden)  # (batch_size, hidden_size)
                 hidden = hx
                 self.hts[i+1] = hx
-                x_out.append(y) # (batch_size, output_size)
+                x_out.append(y) # (batch_size, output_size)    
+        else:
+            self.hts = np.zeros((t+1, b, self.hidden_size))
+            self.hts[0] = hidden.cpu().detach().numpy()
+            for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i,:], (hidden,cell))
+                y, hx = self.ltc(x[:, i,:], hidden)  # (batch_size, hidden_size)
+                hidden = hx
+                self.hts[i+1] = hx.cpu().detach().numpy()
+                x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
 
         self.time_steps = t
         self.batch_size = b
@@ -882,8 +961,89 @@ class LTC_solver(LSTM_solver):
 
     
 class LTC_solver_Low(LTC_solver):
-    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False):
-        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm)
+    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False,if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm,if_wiring=if_wiring)
+
+    def loss_fn(self, x, y_hat):
+        hts = self(x,raw=True)
+        # Activity loss
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(hts**2).sum()
+        y = self(x,raw=False)
+        # y_hat = y_hat.transpose(0,1)
+        loss_sin_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
+        loss_cos_x = self.loss_func(y[:,:,1],y_hat[:,:,1])
+        loss_sin_y = self.loss_func(y[:,:,2],y_hat[:,:,2])
+        loss_cos_y = self.loss_func(y[:,:,3],y_hat[:,:,3])
+        loss = loss_sin_x + loss_cos_x + loss_sin_y + loss_cos_y + activity_L2
+        self.losses.append(loss.item())
+        return loss
+    
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
+            data = input[i][0]
+            labels = input[i][1]
+            labels = sincos_from_2D(labels)
+            loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
+
+class CfC_solver(LTC_solver):
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False,if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm,if_wiring=if_wiring)
+        self.cfc = WiredCfCCell(self.input_size,self.wiring)
+        self.if_lstm = if_lstm
+        if self.if_lstm:
+            self.lstm_cell = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
+            self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
+        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
+
+        self.optimizer = SophiaG(self.parameters(), lr=lr, weight_decay=weight_decay)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+
+    def forward(self, x, raw=False, inference=False):
+        x = x.squeeze(-1)
+        b, t, _ = x[:,1:,:].shape
+        hidden = self.start_encoder(x[:,0,:])
+        cell = self.c_encoder(x[:,0,:])
+        x_out = []
+        ts = 1.0
+        if not inference:
+            self.hts = torch.zeros(t+1, b, self.hidden_size)
+            self.hts[0] = hidden
+            for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
+                y, hx = self.cfc(x[:, i+1,:], hidden, timespans=ts)  # (batch_size, hidden_size)
+                hidden = hx
+                self.hts[i+1] = hx
+                x_out.append(y) # (batch_size, output_size)    
+        else:
+            self.hts = np.zeros((t+1, b, self.hidden_size))
+            self.hts[0] = hidden.cpu().detach().numpy()
+            for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
+                y, hx = self.cfc(x[:, i+1,:], hidden,timespans=ts)
+                hidden = hx
+                self.hts[i+1] = hx.cpu().detach().numpy()
+                x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
+            
+        self.time_steps = t
+        self.batch_size = b
+        # output shape (batch_size, seq_len, input_size)
+        if not inference:
+            if not raw:
+                return torch.stack(x_out, dim=0).permute(1, 0, 2)
+        else:
+            if not raw:
+                return np.array(x_out).transpose(1, 0, 2)
+        return self.hts
+    
+
+class CfC_solver_Low(CfC_solver):
+    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False,if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm,if_wiring=if_wiring)
 
     def loss_fn(self, x, y_hat):
         hts = self(x,raw=True)

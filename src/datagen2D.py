@@ -270,7 +270,7 @@ def smooth_wandering_2D_circular_hdv(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigm
     velocities = torch.tensor(np.random.rayleigh(v_sigma, (n_data,t_steps))) #torch.rand((n_data,t_steps))*v_sigma
     direction_pert = torch.randn((n_data,t_steps))*np.pi*d_sigma
     directions = torch.cumsum(direction_pert,dim=1)+start_directions
-    data[:,:,0] = torch.reminder(directions,2*np.pi)
+    data[:,:,0] = torch.remainder(directions,2*np.pi)
     data[:,:,1] = velocities
     labels[:,:,0] = torch.cumsum(velocities*torch.cos(directions),dim=1)
     labels[:,:,1] = torch.cumsum(velocities*torch.sin(directions),dim=1)
