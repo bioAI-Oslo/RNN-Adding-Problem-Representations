@@ -829,11 +829,15 @@ class LSTM_solver_Low(LSTM_solver):
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
 class LTC_solver(LSTM_solver):
-    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2, if_lstm=False):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.output_size = output_size
         wiring = AutoNCP(self.hidden_size, self.output_size)
         self.ltc = LTCCell(wiring,self.input_size)
+        self.if_lstm = if_lstm
+        if self.if_lstm:
+            self.lstm_cell = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
+            self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
 
         self.optimizer = SophiaG(self.parameters(), lr=lr, weight_decay=weight_decay)
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
@@ -842,11 +846,14 @@ class LTC_solver(LSTM_solver):
         x = x.squeeze(-1)
         b, t, _ = x[:,1:,:].shape
         hidden = self.start_encoder(x[:,0,:])
+        cell = self.c_encoder(x[:,0,:])
         x_out = []
         if inference:
             self.hts = np.zeros((t+1, b, self.hidden_size))
             self.hts[0] = hidden.cpu().detach().numpy()
             for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
                 y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
                 hidden = hx
                 self.hts[i+1] = hx.cpu().detach().numpy()
@@ -855,6 +862,8 @@ class LTC_solver(LSTM_solver):
             self.hts = torch.zeros(t+1, b, self.hidden_size)
             self.hts[0] = hidden
             for i in range(t):
+                if self.if_lstm:
+                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
                 y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
                 hidden = hx
                 self.hts[i+1] = hx
@@ -870,10 +879,11 @@ class LTC_solver(LSTM_solver):
             if not raw:
                 return np.array(x_out).transpose(1, 0, 2)
         return self.hts
+
     
 class LTC_solver_Low(LTC_solver):
-    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
-        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+    def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,if_lstm=False):
+        super().__init__(input_size,hidden_size,output_size=output_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space,if_lstm=if_lstm)
 
     def loss_fn(self, x, y_hat):
         hts = self(x,raw=True)
