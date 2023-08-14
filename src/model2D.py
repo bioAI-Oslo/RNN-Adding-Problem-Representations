@@ -18,6 +18,10 @@ from ncps.torch import LTC, LTCCell, CfCCell, WiredCfCCell
 import pytorch_lightning as pl
 from Sophia import SophiaG
 
+import ratinabox #IMPORT 
+from ratinabox.Environment import Environment
+from ratinabox.Agent import Agent
+
 import sys
 sys.path.append('../src')
 from datagen import *
@@ -1068,3 +1072,30 @@ class CfC_solver_Low(CfC_solver):
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
+
+    def train_ratinabox(self,epochs,t_steps=200,batch_size = 64):
+        # Use rat-in-a-box package to generate data
+        # Data: 2D velocity vectors
+        Env = Environment(params={
+            'boundary':[[-np.pi,-np.pi],[-np.pi,np.pi],[np.pi,np.pi],[np.pi,-np.pi]],
+            }) 
+        Ag = Agent(Env)
+        # batch_size = 1
+        # Ag.speed_mean = speed_mean
+        # Ag.speed_std = speed_std
+        t = tqdm(range(epochs), desc="Loss", leave=True)
+        for e in t:
+            data = torch.zeros((batch_size, t_steps+1, 2))
+            data[0,0,:] = torch.tensor(Ag.pos)
+            # Labels: 2D positions
+            labels = torch.zeros((batch_size, t_steps, 2))
+            for j in range(t_steps): 
+                data[0,j+1,:] = torch.tensor(Ag.velocity)
+                labels[0,j,:] = torch.tensor(Ag.pos)
+                Ag.update()
+            data = data.unsqueeze(-1)
+            labels = sincos_from_2D(labels)
+            loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
+
+        
