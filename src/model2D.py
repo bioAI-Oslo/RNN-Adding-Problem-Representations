@@ -1076,9 +1076,10 @@ class CfC_solver_Low(CfC_solver):
     def train_ratinabox(self,epochs,t_steps=200,batch_size = 64):
         # Use rat-in-a-box package to generate data
         # Data: 2D velocity vectors
-        Env = Environment(params={
-            'boundary':[[-np.pi,-np.pi],[-np.pi,np.pi],[np.pi,np.pi],[np.pi,-np.pi]],
-            }) 
+        # Env = Environment(params={
+        #     'boundary':[[-np.pi,-np.pi],[-np.pi,np.pi],[np.pi,np.pi],[np.pi,-np.pi]],
+        #     }) 
+        Env = Environment()
         Ag = Agent(Env)
         # batch_size = 1
         # Ag.speed_mean = speed_mean

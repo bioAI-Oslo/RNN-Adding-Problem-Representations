@@ -482,15 +482,36 @@ def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
     data = torch.zeros((n_data, t_steps, 2))
     # Labels: 2D positions
     labels = torch.zeros((n_data, t_steps, 2))
-    Env = Environment() 
-    Ag = Agent(Env)
     # Ag.speed_mean = speed_mean
     # Ag.speed_std = speed_std
     for i in tqdm(range(n_data)):
+        Env = Environment() 
+        Ag = Agent(Env)
         for j in range(t_steps): 
             data[i,j] = torch.tensor(Ag.pos)
             labels[i,j] = torch.tensor(Ag.velocity)
             Ag.update()
+    data = data.unsqueeze(3)
+    # labels = labels*box_size
+    return data, labels
+
+def rat_box_v2(n_data,t_steps):
+    # Use rat-in-a-box package to generate data
+    # Data: 2D velocity vectors
+    data = torch.zeros((n_data, t_steps+1, 2))
+    # Labels: 2D positions
+    labels = torch.zeros((n_data, t_steps, 2))
+    # Ag.speed_mean = speed_mean
+    # Ag.speed_std = speed_std
+    for i in tqdm(range(n_data)):
+        Env = Environment() 
+        Ag = Agent(Env)
+        Ag.dt = 0.1
+        data[i,0] = torch.tensor(Ag.pos)
+        for j in range(t_steps): 
+            Ag.update()
+        data[i,1:] = torch.tensor(Ag.history["vel"])*2*np.pi
+        labels[i] = torch.tensor(Ag.history["pos"])*2*np.pi - np.pi
     data = data.unsqueeze(3)
     # labels = labels*box_size
     return data, labels

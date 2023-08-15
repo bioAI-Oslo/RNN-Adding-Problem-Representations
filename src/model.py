@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable, functional
 import torch.optim as optim
 
+from Sophia import SophiaG
+
 import sys
 sys.path.append('../src')
 from datagen import *
@@ -55,7 +57,8 @@ class torch_RNN1(nn.Module):
         self.loss_func = torch.nn.MSELoss()
 
         self.lr = lr
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        # self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr)
 
         self.losses = []
         self.accs = []
@@ -235,7 +238,8 @@ class torch_RNN_full_manual(nn.Module):
 
     def forward(self, x):
         # h = self.input(x[:,0,:])
-        h = torch.zeros(1, x.size(0), self.hidden_size)
+        self.time_steps = x.size(1)
+        h = torch.zeros(x.size(0), self.hidden_size)
         self.hts = torch.zeros(self.time_steps, x.size(0), self.hidden_size)
         self.hts[0] = h
         # Main RNN loop
@@ -244,7 +248,7 @@ class torch_RNN_full_manual(nn.Module):
             self.hts[t] = h
         # If outputnn is true, use a linear layer to output the final hidden state
         if self.outputnn:
-            return self.output(h).squeeze()
+            return self.output(self.hts).squeeze()
         # Else, output the "raw" final hidden state
         elif self.hidden_size == 1:
             return h.squeeze()
@@ -253,7 +257,7 @@ class torch_RNN_full_manual(nn.Module):
 
     def loss_fn(self, x, y_hat):
         y = self(x)
-        loss = self.loss_func(y,y_hat)
+        loss = self.loss_func(y,y_hat.view_as(y))
         self.losses.append(loss.item())
         return loss
 
@@ -278,6 +282,15 @@ class torch_RNN_full_manual(nn.Module):
                 # self.accs.append(acc)
         return self.losses
     
+    def train_loader(self, loader, epochs=100):
+        for epoch in tqdm(range(epochs)):
+            for i,(inputs,labels) in enumerate(loader):
+                loss = self.train_step(inputs,labels)
+                self.losses.append(loss)
+                # acc = (abs(self(inputs)-labels) <= 0.0025*self.time_steps).float().sum().item()/len(inputs)**2
+                # self.accs.append(acc)
+        return self.losses
+    
     def plot_losses(self,average=None):
         losses = np.array(self.losses)
         if average == None:
@@ -297,6 +310,20 @@ class torch_RNN_full_manual(nn.Module):
         plt.plot(accs)
         plt.title("Accuracy on training data")
         plt.show()
+
+    def train_gradual(self, epochs=100, loader=None):
+        i = 0
+        training_steps = 1
+        t = tqdm(range(epochs), desc="Loss", leave=True)
+        for epoch in tqdm(range(epochs)):
+            if i%50 == 0:
+                training_steps += 1
+            data,labels, _ = datagen_lowetal_direct_bounded(self.batch_size,training_steps)
+            loss = self.train_step(data.to(device),labels.to(device))
+            i+=1
+            # t.set_description(f"Loss: {loss:.5f}")
+        print("Last training time steps:",training_steps)
+        return self.losses
 
 
 class RNN_L2(torch_RNN_full_manual):
@@ -877,11 +904,13 @@ class RNN_circular_LowEtAl_bridged(RNN_circular_LowEtAl):
     def train_gradual(self, epochs=100, loader=None):
         i = 0
         training_steps = 1
+        t = tqdm(range(epochs), desc="Loss", leave=True)
         for epoch in tqdm(range(epochs)):
             if i%50 == 0:
                 training_steps += 1
             data,labels = datagen_circular_pm(self.batch_size,training_steps,sigma=0.05)
             loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
             i+=1
         print("Last training time steps:",training_steps)
         return self.losses

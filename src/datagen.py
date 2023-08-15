@@ -9,6 +9,15 @@ import torch.nn.functional as F
 from torch.autograd import Variable, functional
 import torch.optim as optim
 
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print("Running on GPU: ", device)
+else:
+    device = torch.device("cpu")
+    print("Running on CPU")
+
+torch.set_default_device(device)
+
 def datagen(n_data,t_steps,n_masks):
     # For å generere data til generell adding problem
     data = torch.zeros((n_data, t_steps, 2))
