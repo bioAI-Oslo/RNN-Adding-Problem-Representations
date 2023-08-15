@@ -28,6 +28,31 @@ else:
 torch.set_default_device(device)
 
 @torch.compile
+def ornstein_uhlenbeck(dt, x, drift=0.0, noise_scale=0.2, coherence_time=5.0):
+    # From Ratinabox Github
+    """An ornstein uhlenbeck process in x.
+    x can be multidimensional
+    Args:
+        dt: update time step
+        x: the stochastic variable being updated
+        drift (float, or same type as x, optional): [description]. Defaults to 0.
+        noise_scale (float, or same type as x, optional): Magnitude of deviations from drift. Defaults to 0.2 (20 cm s^-1 if units of x are in metres).
+        coherence_time (float, optional):
+        Effectively over what time scale you expect x to change. Can be a vector (one timescale for each element of x) directions. Defaults to 5.
+
+    Returns:
+        dx (same type as x); the required update to x
+    """
+    x = torch.Tensor(x)
+    drift = drift * torch.ones_like(x)
+    noise_scale = noise_scale * torch.ones_like(x)
+    coherence_time = coherence_time * torch.ones_like(x)
+    sigma = torch.sqrt((2 * noise_scale**2) / (coherence_time * dt))
+    theta = 1 / coherence_time
+    dx = theta * (drift - x) * dt + sigma * torch.randn(x.shape)*dt
+    return dx
+
+@torch.compile
 def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
     # Stability is the pertubation on the 90 degree turn in a boundry interaction, the higher the more stable but the paths will lie in a circle not go in the corners
     # Lower stability will fill the whole square with paths, but the path generation may be more unstable
@@ -69,6 +94,7 @@ def smooth_wandering_2D_squarefix(n_data,t_steps,bound=0.5,v_sigma=0.01,d_sigma=
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
         count += 1
     # print(count)
+    ### DATA IS NOT SCALED BY 2PI HERE AS IT SHOULD
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
@@ -116,6 +142,7 @@ def smooth_wandering_2D_squarefix_hdv(n_data,t_steps,bound=0.5,v_sigma=0.01,d_si
         bound_mask = (labels[:,:,0] > bound) | (labels[:,:,0] < -bound) | (labels[:,:,1] > bound) | (labels[:,:,1] < -bound)
         count += 1
     # print(count)
+    ### DATA IS NOT SCALED BY 2PI HERE AS IT SHOULD
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
@@ -173,6 +200,7 @@ def smooth_wandering_2D_squarefix_randomstart(n_data,t_steps,bound=0.5,v_sigma=0
     # print(count)
     # Concatenate the start positions to the data
     start_positions = start_positions*2*np.pi/(2*bound)
+    ### DATA IS NOT SCALED BY 2PI HERE AS IT SHOULD
     data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
@@ -232,10 +260,13 @@ def smooth_wandering_2D_squarefix_randomstart_hdv(n_data,t_steps,bound=0.5,v_sig
     # print(count)
     # Concatenate the start positions to the data
     start_positions = start_positions*2*np.pi/(2*bound)
+    ### DATA IS NOT SCALED BY 2PI HERE AS IT SHOULD
     data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
+
+
 
 @torch.compile
 def smooth_wandering_2D_squarefix_randomstart_hdv_vrng(n_data,t_steps,bound=0.5,v_sigma_mean=0.01,d_sigma=0.1,v_bound_reduction=0.15,stability=0.01):
@@ -295,10 +326,121 @@ def smooth_wandering_2D_squarefix_randomstart_hdv_vrng(n_data,t_steps,bound=0.5,
     # print(count)
     # Concatenate the start positions to the data
     start_positions = start_positions*2*np.pi/(2*bound)
+    ### DATA IS NOT SCALED BY 2PI HERE AS IT SHOULD
     data = torch.cat((start_positions.unsqueeze(1),data),dim=1)
     data = data.unsqueeze(-1)
     labels = labels*2*np.pi/(2*bound)
     return data, labels
+
+from scipy import stats as stats
+
+def ornstein_uhlenbeck(dt, x, drift=0.0, noise_scale=0.2, coherence_time=5.0):
+    # From Ratinabox Github
+    """An ornstein uhlenbeck process in x.
+    x can be multidimensional
+    Args:
+        dt: update time step
+        x: the stochastic variable being updated
+        drift (float, or same type as x, optional): [description]. Defaults to 0.
+        noise_scale (float, or same type as x, optional): Magnitude of deviations from drift. Defaults to 0.2 (20 cm s^-1 if units of x are in metres).
+        coherence_time (float, optional):
+        Effectively over what time scale you expect x to change. Can be a vector (one timescale for each element of x) directions. Defaults to 5.
+
+    Returns:
+        dx (same type as x); the required update to x
+    """
+    x = torch.Tensor(x)
+    drift = drift * torch.ones_like(x)
+    noise_scale = noise_scale * torch.ones_like(x)
+    coherence_time = coherence_time * torch.ones_like(x)
+    sigma = torch.sqrt((2 * noise_scale**2) / (coherence_time * dt))
+    theta = 1 / coherence_time
+    dx = theta * (drift - x) * dt + sigma * torch.randn(x.shape)*dt
+    return dx
+
+def normal_to_rayleigh(x, sigma=1):
+    """Converts a normally distributed variable (mean 0, var 1) to a rayleigh distributed variable (sigma)"""
+    x = torch.tensor(stats.norm.cdf(x.cpu()))  # norm to uniform
+    x = sigma * torch.sqrt(-2 * torch.log(1 - x))  # uniform to rayleigh
+    return x
+
+def rayleigh_to_normal(x, sigma=1):
+    """Converts a rayleigh distributed variable (sigma) to a normally distributed variable (mean 0, var 1)"""
+    x = 1 - torch.exp(-(x**2) / (2 * sigma**2))  # rayleigh to uniform
+    x = torch.clamp(x, min=1e-6, max=1 - 1e-6)
+    x = torch.tensor(stats.norm.ppf(x.cpu()))  # uniform to normal
+    return x
+
+def smooth_wandering_2D_ratinabox(n_data,t_steps,v_sigma=0.08,v_coherence=0.7,d_sigma=120 * (np.pi / 180),d_coherence=0.08,d_scaler=10,v_bound_reduction=0.15,dt=0.01):
+    bound = 0.5
+    v_mean = 0.08
+    speed_coherence = v_coherence
+    direction_pert_coherence = d_coherence
+    direction_pert_std=  d_sigma
+    # Save head direction and speed in data
+    data = torch.zeros((n_data, t_steps+1, 2))
+    # Save position in x and y direction in labels
+    labels = torch.zeros((n_data, t_steps, 2))
+    start_positions = torch.rand(n_data,2)*2*bound-bound
+    data[:,0,:] = start_positions
+    
+    # Draw start directions such that they are not pointing towards the boundry
+    # Where start positions is in for example first quadrant, draw start directions in between pi and 3pi/2
+    directions = torch.rand(n_data)
+    # start_directions = start_directions.unsqueeze(1)
+    speeds = v_mean*torch.ones(n_data)
+    direction_perts = torch.zeros(n_data) # = start rotational speeds
+    for t in range(t_steps):
+        direction_perts_new = ornstein_uhlenbeck(dt,direction_perts,drift=0,noise_scale=direction_pert_std,coherence_time=direction_pert_coherence)
+        if torch.any(speeds==0):  # add tiny velocity in [1,0] direction to avoid nans
+            speeds[speeds==0] = 1e-8
+        normal_variable = rayleigh_to_normal(speeds, sigma=v_mean)
+        new_normal_variable = normal_variable + ornstein_uhlenbeck(dt=dt,x=normal_variable,drift=0,noise_scale=1,coherence_time=speed_coherence)
+        new_speeds = normal_to_rayleigh(new_normal_variable, sigma=v_mean)
+        directions_new = directions + direction_perts_new*d_scaler*dt
+        directions_new = torch.remainder(directions_new,2*np.pi)
+        data[:,t+1,0] = directions_new
+        data[:,t+1,1] = new_speeds
+        if t == 0:
+            labels[:,t,0] = start_positions[:,0] + new_speeds*torch.cos(directions_new)
+            labels[:,t,1] = start_positions[:,1] + new_speeds*torch.sin(directions_new)
+        else:
+            labels[:,t,0] = labels[:,t-1,0] + new_speeds*torch.cos(directions_new)
+            labels[:,t,1] = labels[:,t-1,1] + new_speeds*torch.sin(directions_new)
+        bound_mask = (labels[:,t,0] > bound) | (labels[:,t,0] < -bound) | (labels[:,t,1] > bound) | (labels[:,t,1] < -bound)
+        while bound_mask.any():
+            # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
+            direction_perts_new[bound_mask] = torch.Tensor(np.random.choice([-1,1],int(bound_mask.sum()))).to(device)*(torch.randn((int(bound_mask.sum()),))*0.5 + np.pi/2)
+            if torch.any(speeds[bound_mask]==0):  # add tiny velocity in [1,0] direction to avoid nans
+                speeds[bound_mask][speeds[bound_mask]==0] = 1e-8
+            normal_variable = rayleigh_to_normal(speeds[bound_mask], sigma=v_mean)
+            new_normal_variable = normal_variable + ornstein_uhlenbeck(dt=dt,x=normal_variable,drift=0,noise_scale=1,coherence_time=speed_coherence)
+            new_speeds[bound_mask] = normal_to_rayleigh(new_normal_variable, sigma=v_mean)*v_bound_reduction
+            directions_new[bound_mask] = directions[bound_mask] + direction_perts_new[bound_mask]
+            directions_new[bound_mask] = torch.remainder(directions_new[bound_mask],2*np.pi)
+            
+            data[bound_mask,t+1,0] = directions_new[bound_mask]
+            data[bound_mask,t+1,1] = new_speeds[bound_mask].float()
+            if t == 0:
+                labels[bound_mask,t,0] = (start_positions[bound_mask,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])).float()
+                labels[bound_mask,t,1] = (start_positions[bound_mask,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])).float()
+            else:
+                labels[bound_mask,t,0] = (labels[bound_mask,t-1,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])).float()
+                labels[bound_mask,t,1] = (labels[bound_mask,t-1,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])).float()
+            bound_mask = (labels[:,t,0] > bound) | (labels[:,t,0] < -bound) | (labels[:,t,1] > bound) | (labels[:,t,1] < -bound)
+        speeds = new_speeds
+        directions = directions_new
+        direction_perts = direction_perts_new
+        
+
+    data = data.unsqueeze(-1)
+    # Scale by 2pi to be in range -pi to pi
+    data[:,0,:,:] = data[:,0,:,:]*2*np.pi/(2*bound)
+    data[:,1:,1,:] = data[:,1:,1,:] * 2*np.pi/(2*bound)
+    labels = labels*2*np.pi/(2*bound)
+    return data, labels
+
+        
 
 def smooth_wandering_2D_circular(n_data,t_steps,bound=0.5,v_sigma=0.1,d_sigma=0.1):
     # Smooth wandering where you come back to other side of bound like pac-man
@@ -495,7 +637,8 @@ def rat_box(n_data,t_steps,speed_mean=5,speed_std=5,box_size=1):
     # labels = labels*box_size
     return data, labels
 
-def rat_box_v2(n_data,t_steps):
+@torch.compile
+def rat_box_v2(n_data,t_steps,hdv=True):
     # Use rat-in-a-box package to generate data
     # Data: 2D velocity vectors
     data = torch.zeros((n_data, t_steps+1, 2))
@@ -503,18 +646,25 @@ def rat_box_v2(n_data,t_steps):
     labels = torch.zeros((n_data, t_steps, 2))
     # Ag.speed_mean = speed_mean
     # Ag.speed_std = speed_std
-    for i in tqdm(range(n_data)):
+    # for i in tqdm(range(n_data)):
+    for i in range(n_data):
         Env = Environment() 
         Ag = Agent(Env)
         Ag.dt = 0.1
-        data[i,0] = torch.tensor(Ag.pos)
+        data[i,0] = torch.tensor(Ag.pos)*2*np.pi - np.pi
         for j in range(t_steps): 
             Ag.update()
         data[i,1:] = torch.tensor(Ag.history["vel"])*2*np.pi
         labels[i] = torch.tensor(Ag.history["pos"])*2*np.pi - np.pi
+    if hdv:
+        data_old = data.clone()
+        data[:,1:,0] = torch.atan2(data_old[:,1:,0],data_old[:,1:,1])
+        data[:,1:,1] = data_old[:,1:].norm(dim=-1)
     data = data.unsqueeze(3)
     # labels = labels*box_size
     return data, labels
+
+
             
 
 def rat_box_vemund(n_data,t_steps,box_size=1):
@@ -553,6 +703,7 @@ def sincos_to_2D(labels):
     return labels_new
 
 def hd_direction_input_convert(input):
+    # hd is relative angle to angle to start position
     input_data = input.copy()
     for i in range(len(input_data)):
         path = input_data[i,1][:,:,:]
@@ -571,6 +722,7 @@ def hd_direction_input_convert(input):
     return input_data
 
 def hd_direction_input_convert_partial(data,labels):
+    # hd is relative angle to angle to start position
     labels_new = labels.clone()
     path = labels_new
     data = data.squeeze()

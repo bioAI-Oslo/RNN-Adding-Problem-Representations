@@ -1069,7 +1069,7 @@ class CfC_solver_Low(CfC_solver):
         for i in t:
             data = input[i][0]
             labels = input[i][1]
-            labels = sincos_from_2D(labels)
+            labels = sincos_from_2D(labels.squeeze(-1))
             loss = self.train_step(data.to(device),labels.to(device))
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
