@@ -834,6 +834,18 @@ class LSTM_solver(RNN_circular_2D_randomstart_trivial_sorcher):
                 return torch.stack(x_out, dim=0).permute(1, 0, 2).cpu().detach().numpy()
             return self.hts.cpu().detach().numpy()
     
+    def loss_fn(self, x, y_hat):
+        hts = self(x,raw=True)
+        # Activity loss
+        activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(hts**2).sum()
+        y = self(x,raw=False)
+        # y_hat = y_hat.transpose(0,1)
+        loss_x = self.loss_func(y[:,:,0],y_hat[:,:,0])
+        loss_y = self.loss_func(y[:,:,1],y_hat[:,:,1])
+        loss = loss_x + loss_y + activity_L2
+        self.losses.append(loss.item())
+        return loss
+    
 class LSTM_solver_Low(LSTM_solver):
     def __init__(self,input_size,hidden_size,output_size=4,lr=0.0002,act_decay=1.0,weight_decay=0.01,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
@@ -897,18 +909,21 @@ class LTC_solver(LSTM_solver):
                     hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
                 y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
                 hidden = hx
+                cell = cx
                 self.hts[i+1] = hx
                 x_out.append(y) # (batch_size, output_size)    
         else:
-            self.hts = np.zeros((t+1, b, self.hidden_size))
-            self.hts[0] = hidden.cpu().detach().numpy()
-            for i in range(t):
-                if self.if_lstm:
-                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
-                y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
-                hidden = hx
-                self.hts[i+1] = hx.cpu().detach().numpy()
-                x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
+            with torch.no_grad():
+                self.hts = np.zeros((t+1, b, self.hidden_size))
+                self.hts[0] = hidden.cpu().detach().numpy()
+                for i in range(t):
+                    if self.if_lstm:
+                        hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
+                    y, hx = self.ltc(x[:, i+1,:], hidden)  # (batch_size, hidden_size)
+                    hidden = hx
+                    cell = cx
+                    self.hts[i+1] = hx.cpu().detach().numpy()
+                    x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
 
         self.time_steps = t
         self.batch_size = b
@@ -939,18 +954,21 @@ class LTC_solver_0start(LTC_solver):
                     hx, cx = self.lstm_cell(x[:, i,:], (hidden,cell))
                 y, hx = self.ltc(x[:, i,:], hidden)  # (batch_size, hidden_size)
                 hidden = hx
+                cell = cx
                 self.hts[i+1] = hx
                 x_out.append(y) # (batch_size, output_size)    
         else:
-            self.hts = np.zeros((t+1, b, self.hidden_size))
-            self.hts[0] = hidden.cpu().detach().numpy()
-            for i in range(t):
-                if self.if_lstm:
-                    hx, cx = self.lstm_cell(x[:, i,:], (hidden,cell))
-                y, hx = self.ltc(x[:, i,:], hidden)  # (batch_size, hidden_size)
-                hidden = hx
-                self.hts[i+1] = hx.cpu().detach().numpy()
-                x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
+            with torch.no_grad():
+                self.hts = np.zeros((t+1, b, self.hidden_size))
+                self.hts[0] = hidden.cpu().detach().numpy()
+                for i in range(t):
+                    if self.if_lstm:
+                        hx, cx = self.lstm_cell(x[:, i,:], (hidden,cell))
+                    y, hx = self.ltc(x[:, i,:], hidden)  # (batch_size, hidden_size)
+                    hidden = hx
+                    cell = cx
+                    self.hts[i+1] = hx.cpu().detach().numpy()
+                    x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
 
         self.time_steps = t
         self.batch_size = b
@@ -1020,18 +1038,21 @@ class CfC_solver(LTC_solver):
                     hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
                 y, hx = self.cfc(x[:, i+1,:], hidden, timespans=ts)  # (batch_size, hidden_size)
                 hidden = hx
+                cell = cx
                 self.hts[i+1] = hx
                 x_out.append(y) # (batch_size, output_size)    
         else:
-            self.hts = np.zeros((t+1, b, self.hidden_size))
-            self.hts[0] = hidden.cpu().detach().numpy()
-            for i in range(t):
-                if self.if_lstm:
-                    hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
-                y, hx = self.cfc(x[:, i+1,:], hidden,timespans=ts)
-                hidden = hx
-                self.hts[i+1] = hx.cpu().detach().numpy()
-                x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
+            with torch.no_grad():
+                self.hts = np.zeros((t+1, b, self.hidden_size))
+                self.hts[0] = hidden.cpu().detach().numpy()
+                for i in range(t):
+                    if self.if_lstm:
+                        hx, cx = self.lstm_cell(x[:, i+1,:], (hidden,cell))
+                    y, hx = self.cfc(x[:, i+1,:], hidden,timespans=ts)
+                    hidden = hx
+                    cell = cx
+                    self.hts[i+1] = hx.cpu().detach().numpy()
+                    x_out.append(y.cpu().detach().numpy()) # (batch_size, output_size)
             
         self.time_steps = t
         self.batch_size = b
@@ -1043,6 +1064,15 @@ class CfC_solver(LTC_solver):
             if not raw:
                 return np.array(x_out).transpose(1, 0, 2)
         return self.hts
+    
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
+            data = input[i][0]
+            labels = input[i][1]
+            loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
     
 
 class CfC_solver_Low(CfC_solver):
@@ -1072,31 +1102,3 @@ class CfC_solver_Low(CfC_solver):
             labels = sincos_from_2D(labels.squeeze(-1))
             loss = self.train_step(data.to(device),labels.to(device))
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
-
-    def train_ratinabox(self,epochs,t_steps=200,batch_size = 64):
-        # Use rat-in-a-box package to generate data
-        # Data: 2D velocity vectors
-        # Env = Environment(params={
-        #     'boundary':[[-np.pi,-np.pi],[-np.pi,np.pi],[np.pi,np.pi],[np.pi,-np.pi]],
-        #     }) 
-        Env = Environment()
-        Ag = Agent(Env)
-        # batch_size = 1
-        # Ag.speed_mean = speed_mean
-        # Ag.speed_std = speed_std
-        t = tqdm(range(epochs), desc="Loss", leave=True)
-        for e in t:
-            data = torch.zeros((batch_size, t_steps+1, 2))
-            data[0,0,:] = torch.tensor(Ag.pos)
-            # Labels: 2D positions
-            labels = torch.zeros((batch_size, t_steps, 2))
-            for j in range(t_steps): 
-                data[0,j+1,:] = torch.tensor(Ag.velocity)
-                labels[0,j,:] = torch.tensor(Ag.pos)
-                Ag.update()
-            data = data.unsqueeze(-1)
-            labels = sincos_from_2D(labels)
-            loss = self.train_step(data.to(device),labels.to(device))
-            t.set_description(f"Loss: {loss:.5f}", refresh=True)
-
-        

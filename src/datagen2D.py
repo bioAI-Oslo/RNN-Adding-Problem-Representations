@@ -371,9 +371,9 @@ def rayleigh_to_normal(x, sigma=1):
     x = torch.tensor(stats.norm.ppf(x.cpu()))  # uniform to normal
     return x
 
-def smooth_wandering_2D_ratinabox(n_data,t_steps,v_sigma=0.08,v_coherence=0.7,d_sigma=120 * (np.pi / 180),d_coherence=0.08,d_scaler=10,v_bound_reduction=0.15,dt=0.01):
+def smooth_wandering_2D_ratinabox(n_data,t_steps,v_mean=0.08,v_sigma=0.08,v_coherence=0.7,d_sigma=120 * (np.pi / 180),d_coherence=10.0,d_scaler=10,v_bound_reduction=0.15,dt=0.1):
     bound = 0.5
-    v_mean = 0.08
+    v_mean = v_mean
     speed_coherence = v_coherence
     direction_pert_coherence = d_coherence
     direction_pert_std=  d_sigma
@@ -402,11 +402,11 @@ def smooth_wandering_2D_ratinabox(n_data,t_steps,v_sigma=0.08,v_coherence=0.7,d_
         data[:,t+1,0] = directions_new
         data[:,t+1,1] = new_speeds
         if t == 0:
-            labels[:,t,0] = start_positions[:,0] + new_speeds*torch.cos(directions_new)
-            labels[:,t,1] = start_positions[:,1] + new_speeds*torch.sin(directions_new)
+            labels[:,t,0] = start_positions[:,0] + new_speeds*torch.cos(directions_new)*dt
+            labels[:,t,1] = start_positions[:,1] + new_speeds*torch.sin(directions_new)*dt
         else:
-            labels[:,t,0] = labels[:,t-1,0] + new_speeds*torch.cos(directions_new)
-            labels[:,t,1] = labels[:,t-1,1] + new_speeds*torch.sin(directions_new)
+            labels[:,t,0] = labels[:,t-1,0] + new_speeds*torch.cos(directions_new)*dt
+            labels[:,t,1] = labels[:,t-1,1] + new_speeds*torch.sin(directions_new)*dt
         bound_mask = (labels[:,t,0] > bound) | (labels[:,t,0] < -bound) | (labels[:,t,1] > bound) | (labels[:,t,1] < -bound)
         while bound_mask.any():
             # If any of the positions are outside the bound, redraw the velocities and directions for those trajectories
@@ -422,11 +422,11 @@ def smooth_wandering_2D_ratinabox(n_data,t_steps,v_sigma=0.08,v_coherence=0.7,d_
             data[bound_mask,t+1,0] = directions_new[bound_mask]
             data[bound_mask,t+1,1] = new_speeds[bound_mask].float()
             if t == 0:
-                labels[bound_mask,t,0] = (start_positions[bound_mask,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])).float()
-                labels[bound_mask,t,1] = (start_positions[bound_mask,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])).float()
+                labels[bound_mask,t,0] = (start_positions[bound_mask,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])*dt).float()
+                labels[bound_mask,t,1] = (start_positions[bound_mask,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])*dt).float()
             else:
-                labels[bound_mask,t,0] = (labels[bound_mask,t-1,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])).float()
-                labels[bound_mask,t,1] = (labels[bound_mask,t-1,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])).float()
+                labels[bound_mask,t,0] = (labels[bound_mask,t-1,0] + new_speeds[bound_mask]*torch.cos(directions_new[bound_mask])*dt).float()
+                labels[bound_mask,t,1] = (labels[bound_mask,t-1,1] + new_speeds[bound_mask]*torch.sin(directions_new[bound_mask])*dt).float()
             bound_mask = (labels[:,t,0] > bound) | (labels[:,t,0] < -bound) | (labels[:,t,1] > bound) | (labels[:,t,1] < -bound)
         speeds = new_speeds
         directions = directions_new
