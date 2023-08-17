@@ -408,7 +408,7 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         ### For x
         normalizer_x = 1 / (torch.norm(h_x[i], dim=-1) * torch.norm(h_x[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.9999999, 0.9999999)))
+        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.99999, 0.99999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_x = angle_test_x * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_x only returns positive angles
@@ -424,7 +424,7 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         ### For y
         normalizer_y = 1 / (torch.norm(h_y[i], dim=-1) * torch.norm(h_y[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_y = torch.abs(torch.acos(torch.clamp(torch.sum(h_y[i]*h_y[i-j], dim=-1) * normalizer_y, -0.9999999, 0.9999999)))
+        angle_test_y = torch.abs(torch.acos(torch.clamp(torch.sum(h_y[i]*h_y[i-j], dim=-1) * normalizer_y, -0.99999, 0.99999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_y = angle_test_y * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_y only returns positive angles
@@ -486,7 +486,7 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         ### For x
         normalizer_x = 1 / (torch.norm(h_x[i], dim=-1) * torch.norm(h_x[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.9999, 0.9999)))
+        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.99999, 0.99999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_x = angle_test_x * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_x only returns positive angles
@@ -502,7 +502,7 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         ### For y
         normalizer_y = 1 / (torch.norm(h_y[i], dim=-1) * torch.norm(h_y[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_y = torch.abs(torch.acos(torch.clamp(torch.sum(h_y[i]*h_y[i-j], dim=-1) * normalizer_y, -0.9999999, 0.9999999)))
+        angle_test_y = torch.abs(torch.acos(torch.clamp(torch.sum(h_y[i]*h_y[i-j], dim=-1) * normalizer_y, -0.99999, 0.99999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_y = angle_test_y * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_y only returns positive angles
@@ -518,7 +518,7 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         ### For z (120 degree)
         normalizer_z = 1 / (torch.norm(h_z[i], dim=-1) * torch.norm(h_z[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_z = torch.abs(torch.acos(torch.clamp(torch.sum(h_z[i]*h_z[i-j], dim=-1) * normalizer_z, -0.9999999, 0.9999999)))
+        angle_test_z = torch.abs(torch.acos(torch.clamp(torch.sum(h_z[i]*h_z[i-j], dim=-1) * normalizer_z, -0.99999, 0.99999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_z = angle_test_z * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_z onlz returns positive angles
