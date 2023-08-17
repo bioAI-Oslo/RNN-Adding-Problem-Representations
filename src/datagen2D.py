@@ -738,3 +738,38 @@ def hd_direction_input_convert_partial(data,labels):
     labels_new[:,:,0] = rel_angle
     labels_new[:,:,1] = dist.squeeze(-1)
     return data.unsqueeze(-1),labels_new
+
+def convert_23D(data,labels):
+    # Convert 2D data to 0,60,120 degree basis
+    basis1 = torch.tensor([np.cos(0), np.sin(0)]).to(device)
+    basis2 = torch.tensor([np.cos(np.pi/3), np.sin(np.pi/3)]).to(device)
+    basis3 = torch.tensor([np.cos(2*np.pi/3), np.sin(2*np.pi/3)]).to(device)
+    basises = torch.stack([basis1, basis2, basis3], dim=0).to(device)
+    # Scale the decompositioned data so that they can be reconstructed to the original data
+    basis_scale = 2/3
+
+    data_23D = torch.zeros(data.shape[0],data.shape[1],3).to(device)
+    labels_23D = torch.zeros(labels.shape[0],labels.shape[1],3).to(device)
+    for i,basis in enumerate(basises):
+        data_23D[:,:,i] = torch.sum(data.squeeze().to(device)*basis.to(device),dim=2)*basis_scale
+        labels_23D[:,:,i] = torch.sum(labels.to(device)*basis.to(device),dim=2)*basis_scale
+
+    data_23D = data_23D.unsqueeze(-1)
+    return data_23D, labels_23D
+
+def convert_23D_single(input):
+    # Convert 2D data to 0,60,120 degree basis
+    basis1 = torch.tensor([np.cos(0), np.sin(0)]).to(device)
+    basis2 = torch.tensor([np.cos(np.pi/3), np.sin(np.pi/3)]).to(device)
+    basis3 = torch.tensor([np.cos(2*np.pi/3), np.sin(2*np.pi/3)]).to(device)
+    basises = torch.stack([basis1, basis2, basis3], dim=0).to(device)
+    # Scale the decompositioned data so that they can be reconstructed to the original data
+    basis_scale = 2/3
+
+    converted = torch.zeros(input.shape[0],3).to(device)
+    for i,basis in enumerate(basises):
+        converted[:,i] = torch.sum(input.squeeze(-1).to(device)*basis.to(device),dim=-1)*basis_scale
+
+    if len(input.shape) == 3:
+        converted = converted.unsqueeze(-1)
+    return converted

@@ -229,7 +229,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
 class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
-        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=False)
+        self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
         self.noise = noise
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -374,7 +374,8 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
         if not inference:
             return self.hts
         else:
-            return self.hts.cpu().detach().numpy()
+            with torch.no_grad():
+                return self.hts.cpu().detach().numpy()
 
     def loss_fn(self, x, y_hat):
         y = self(x)
@@ -448,6 +449,9 @@ class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
 class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.05,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=3):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,noise=noise,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
+        self.start_encoder = torch.nn.Linear(2,self.hidden_size,bias=True)
+
+        self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def loss_fn(self, x, y_hat):
         y = self(x)
@@ -455,8 +459,9 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
         # activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
         
+        y0_hat = convert_23D_single(x[:,0,:,:])
         # Concatenate the start pos to y_hat to make it the same size as y
-        y_hat = torch.cat((x[:,0,:,:].squeeze().unsqueeze(1),y_hat),dim=1)
+        y_hat = torch.cat((y0_hat.squeeze().unsqueeze(1),y_hat),dim=1)
         # Permute y_hat to make it the same shape as y
         y_hat = torch.permute(y_hat,(1,0,2))
 
@@ -481,7 +486,7 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         ### For x
         normalizer_x = 1 / (torch.norm(h_x[i], dim=-1) * torch.norm(h_x[i-j], dim=-1))
         # Cant clamp between -1 and 1 because it will cause NaNs in training
-        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.9999999, 0.9999999)))
+        angle_test_x = torch.abs(torch.acos(torch.clamp(torch.sum(h_x[i]*h_x[i-j], dim=-1) * normalizer_x, -0.9999, 0.9999)))
         # Make the angles that are not supposed to be checked 0
         angle_test_x = angle_test_x * mask.unsqueeze(-1)
         # Must use torch.abs because the angle can be negative, but the angle_test_x only returns positive angles
@@ -534,6 +539,16 @@ class RNN_circular_1D_to_23D_arccos(RNN_circular_1D_to_2D_arccos):
         # self.losses_circle.append(circle_end_loss.item())
         loss = angle_loss_x + angle_loss_y + angle_loss_z + activity_L2
         return loss
+
+    def train_gradual_manual(self,input):
+        # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
+        t = tqdm(range(len(input)), desc="Loss", leave=True)
+        for i in t:
+            data = input[i][0]
+            labels = input[i][1]
+            _, labels = convert_23D(data,labels)
+            loss = self.train_step(data.to(device),labels.to(device))
+            t.set_description(f"Loss: {loss:.5f}", refresh=True)
 
 
 class RNN_circular_2D_xy_relative(RNN_circular_2D_xy_Low):
