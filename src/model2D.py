@@ -210,6 +210,7 @@ class RNN_circular_2D_xy_Low(nn.Module):
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
             i+=1
+            self.scheduler.step()
         print("Last training time steps:",training_steps)
         return self.losses
     
@@ -222,17 +223,19 @@ class RNN_circular_2D_xy_Low(nn.Module):
             labels = sincos_from_2D(labels)
             loss = self.train_step(data.to(device),labels.to(device))
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
+            self.scheduler.step()
 
             
             
 
 class RNN_circular_2D_xy_Low_randomstart(RNN_circular_2D_xy_Low):
-    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
+    def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.1,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2,lr_halve=1000):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
         self.start_encoder = torch.nn.Linear(self.nav_space,self.hidden_size,bias=True)
         self.noise = noise
 
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer,lr_halve,gamma=0.5)
 
     def forward(self, x, raw=False,inference=False):
             # Make h0 trainable
