@@ -280,6 +280,7 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
         self.noise = noise
         self.output = torch.nn.Linear(self.hidden_size,self.nav_space,bias=bias)
         self.optimizer = SophiaG(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer,1000,gamma=0.5)
 
     def forward(self, x, raw=False,inference=False):
             # Make h0 trainable
@@ -344,6 +345,7 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
             labels = input[i][1]
             loss = self.train_step(data.to(device),labels.to(device))
             t.set_description(f"Loss: {loss:.5f}", refresh=True)
+            self.scheduler.step()
 
     def train_gradual_loader(self,data_loader):
         # Input shape: [Epochs,data/labels,batchsize,tsteps,x/y]
@@ -351,12 +353,13 @@ class RNN_circular_2D_randomstart_trivial_sorcher(RNN_circular_2D_xy_Low_randoms
             data = data.squeeze(0)
             labels = labels.squeeze(0)
             loss = self.train_step(data.to(device),labels.to(device))
-
+            self.scheduler.step()
+            
 class RNN_circular_1D_to_2D_arccos(RNN_circular_2D_randomstart_trivial_sorcher):
     def __init__(self,input_size,hidden_size,lr=0.0005,act_decay=0.0,weight_decay=0.01,noise=0.05,irnn=True,outputnn=True,bias=False,Wx_normalize=False,activation=True,batch_size=64,nav_space=2):
         super().__init__(input_size,hidden_size,lr=lr,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,outputnn=outputnn,bias=bias,Wx_normalize=Wx_normalize,activation=activation,batch_size=batch_size,nav_space=nav_space)
 
-    def forward(self, x, raw=False,inference=False):
+    def forward(self, x, raw=True,inference=False):
         # Make h0 trainable
         batch_size_forward = x.size(0)
         # Encoder for initial hidden state

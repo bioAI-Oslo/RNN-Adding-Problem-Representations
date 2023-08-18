@@ -199,6 +199,92 @@ def test_angle_inference(model,reducer,t_test=40,test_batch_size=1000,in_activit
     print("Mean error: ",np.mean(np.abs(angs-dy)))
     return angs, dy, err, y_hat, y
 
+def test_angle_inference_x1D(model,reducer,t_test=40,test_batch_size=1000,in_activity=None,start=np.pi,dim="x"):
+    # Same datagen as in training
+    if in_activity is None:
+        data,labels = datagen_circular_pm(test_batch_size,t_test,sigma=0.05,bound=0.5)
+    else:
+        data, labels = in_activity
+        t_test = data.shape[1]
+        test_batch_size = data.shape[0]
+
+    # Inference model to get the hidden states
+    y_hat = model(data[0:test_batch_size],raw=True,inference=True)
+    start = labels[0:test_batch_size][:,0,0].cpu().detach().numpy()
+    if dim == "x":
+        y_hat = y_hat[:,:,y_hat.shape[-1]//2:]
+    elif dim == "y":
+        y_hat = y_hat[:,:,:y_hat.shape[-1]//2]
+    elif dim == "0":
+        y_hat = y_hat[:,:,y_hat.shape[-1]//3:]
+    elif dim == "60":
+        y_hat = y_hat[:,:,y_hat.shape[-1]//3:2*y_hat.shape[-1]//3]
+    elif dim == "120":
+        y_hat = y_hat[:,:,:2*y_hat.shape[-1]//3]
+    else:
+        raise Exception("dim must be x, y, 0, 60 or 120")
+    y_hat = y_hat.transpose(1,0,2)
+    # y_hat = y_hat.cpu().detach().numpy()
+
+    # PCA projection of the hidden states to 2D space for calculation of angles
+    y_hat_pca = np.zeros((test_batch_size,t_test,2))
+    for i in range(test_batch_size):
+        y_hat_pca[i,:,:] = reducer.transform(y_hat[i,:,:])
+    y_hat = y_hat_pca
+
+    # Get theoretical angles from labels
+    if dim == "x":
+        y = labels[0:test_batch_size][:,:,0]
+    elif dim == "y":
+        y = labels[0:test_batch_size][:,:,1]
+    elif dim == "0":
+        y = labels[0:test_batch_size][:,:,0]
+    elif dim == "60":
+        y = labels[0:test_batch_size][:,:,1]
+    elif dim == "120":
+        y = labels[0:test_batch_size][:,:,2]
+    y = y.cpu().detach().numpy()
+    # Concatenate pi to the start of y to represent starting angle
+    y = np.concatenate((np.reshape(start, (start.shape[0],1)),y),axis=-1)
+
+    # Error between predicted and theoretical angles
+    err = np.zeros((test_batch_size,t_test))
+    # Angles predicted by the model
+    angs = np.zeros((test_batch_size,t_test))
+    # Theoretical angle differences
+    dy = np.zeros((test_batch_size,t_test))
+
+    # Calculate angle differences from cosine distance
+    for j in range(test_batch_size):
+        for i in range(1,t_test):
+            y_hat_i_normalized = y_hat[j,i]/np.linalg.norm(y_hat[j,i])
+            y_hat_i_minus_1_normalized = y_hat[j,i-1]/np.linalg.norm(y_hat[j,i-1])
+            # Angle between y_hat[j,i] and y_hat[j,i-1]
+            ang = np.arccos(y_hat_i_normalized @ y_hat_i_minus_1_normalized)
+            # Use cross product to determine direction/sign of angle change
+            angle_direction = np.sign(np.cross(y_hat_i_normalized,y_hat_i_minus_1_normalized))
+            angs[j,i-1] = ang*angle_direction
+            
+            # Angle differance from labels
+            dy[j,i-1] = y[j,i]-y[j,i-1]
+
+    # For some reason we have to scale angles by 2*pi
+    angs = angs*(2*np.pi)
+    # Choose the sign of the angles that gives the smallest error
+    ang_plus = angs
+    ang_minus = -angs
+    err_plus = np.abs(dy-ang_plus)
+    err_minus = np.abs(dy-ang_minus)
+    if np.mean(err_plus) < np.mean(err_minus):
+        err = err_plus
+        angs = ang_plus
+    else:
+        err = err_minus
+        angs = ang_minus
+
+    print("Mean error: ",np.mean(np.abs(angs-dy)))
+    return angs, dy, err, y_hat, y
+
 def plot_accuracy(angs,dy,y_hat,y):
     err = np.abs(angs - dy)
     err_mean = np.mean(err,axis=0)
