@@ -147,10 +147,11 @@ class RNN_base(nn.Module):
                 self.scheduler.step()
 
 class RNN_2D(RNN_base):
-    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,if_low=False,act_decay=0.0,weight_decay=0.01,act_decay_to_one=False,h_bias=False,input_bias=True,rest_bias=True,irnn=True,activation=True,clip_grad=True,optimizer="Sophia"):
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,if_low=False,act_decay=0.0,weight_decay=0.01,act_decay_to_one=False,h_bias=False,input_bias=True,rest_bias=True,irnn=True,activation=True,clip_grad=True,optimizer="Sophia",if_decoder=True):
         super().__init__(input_size,hidden_size,output_size,lr,act_decay,weight_decay,activation,clip_grad,optimizer)
         self.act_decay_to_one = act_decay_to_one
         self.if_low = if_low
+        self.if_decoder = if_decoder
         if self.if_low:
             self.output_size = 4
 
@@ -204,7 +205,10 @@ class RNN_2D(RNN_base):
             activity_L2 = self.act_decay*((torch.norm(y,dim=-1)-1)**2).sum()
         else:
             activity_L2 = self.act_decay/(self.time_steps*self.hidden_size*self.batch_size)*(y**2).sum()
-        y = self.output(y)
+        if self.if_decoder:
+            y = self.output(y)
+        else:
+            y = self(x)
         y_hat = y_hat.transpose(0,1)
         task_loss = self.loss_func(y,y_hat)
         loss = task_loss + activity_L2
@@ -364,8 +368,8 @@ class RNN_arccos_3x1D(RNN_2D):
             if self.if_scheduler:
                 self.scheduler.step()
 
-class CwRNN(RNN_2D):
-    def __init__(self, input_size, hidden_size, n_modules,if_low=False,bias=True, lr=0.0002, act_decay=1.0,weight_decay=0.01):
+class CwRNN_2D(RNN_2D):
+    def __init__(self, input_size, hidden_size, n_modules,if_low=False,bias=True, lr=0.0002, act_decay=0.0,weight_decay=0.01):
         super().__init__(input_size, hidden_size, lr, act_decay, weight_decay, if_low=if_low)
 
         self.bias = bias
@@ -434,7 +438,7 @@ class CwRNN(RNN_2D):
                 return self.hts
             
 
-class LSTM_solver(RNN_2D):
+class LSTM_2D(RNN_2D):
     def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,if_low=False,act_decay=1.0,weight_decay=0.01,irnn=True,activation=True):
         super().__init__(input_size,hidden_size,output_size,lr=lr,if_low=if_low,act_decay=act_decay,weight_decay=weight_decay,irnn=irnn,activation=activation)
         self.lstm = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
@@ -476,9 +480,9 @@ class LSTM_solver(RNN_2D):
                 return self.hts.permute(1,0,2)
     
 
-class CfC_solver(RNN_2D):
-    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,if_low=False,act_decay=1.0,weight_decay=0.01,if_lstm=True,if_wiring=True):
-        super().__init__(input_size,hidden_size,output_size,lr=lr,if_low=if_low,act_decay=act_decay,weight_decay=weight_decay)
+class CfC_NCP(RNN_2D):
+    def __init__(self,input_size,hidden_size,output_size=2,lr=0.0002,if_low=False,act_decay=0.0,weight_decay=0.0,if_lstm=True,if_wiring=True):
+        super().__init__(input_size,hidden_size,output_size,lr=lr,if_low=if_low,act_decay=act_decay,weight_decay=weight_decay,if_decoder=False)
         self.if_wiring = if_wiring
         if self.if_wiring:
             self.wiring = AutoNCP(self.hidden_size, self.output_size)
@@ -488,7 +492,7 @@ class CfC_solver(RNN_2D):
         if self.if_lstm:
             self.lstm_cell = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
             self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
-        self.cfc = WiredCfCCell(self.input_size,self.wiring)
+        self.cfc = WiredCfCCell(self.input_size,self.wiring).to(device)
 
         self.update_optimizer()
 
@@ -529,9 +533,9 @@ class CfC_solver(RNN_2D):
         if not inference:
             if not raw:
                 return torch.stack(y_out, dim=0)
-            return self.hts.permute(1,0,2)
+            return self.hts
         else:
             with torch.no_grad():
                 if not raw:
                     return torch.stack(y_out, dim=0)
-                return self.hts.permute(1,0,2)
+                return self.hts
