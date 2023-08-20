@@ -26,6 +26,7 @@ def plot_norm(hts,avg_only=True):
     plt.legend()
     plt.show()
     print("Mean norm: ", np.mean(hts))
+    return np.mean(hts,axis=1)
 
 
 def tuning_curve(model,t_test=40,test_batch_size=5000, bins=2000, spherical_data=True, in_activity=None):
@@ -464,7 +465,7 @@ def tuning_curve_2D_fullmodel(model,t_test=40,test_batch_size=5000, bins=2000, i
 
     # Get the hidden states inferenced from the test data
     hts = model(data,raw=True,inference=True)
-    # hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
+    hts = hts.cpu().detach().numpy() # Shape [t_steps, batch_size, hidden_size] = [21, 64, 128]
     n_cells = hts.shape[2]
     
     import scipy.stats as stats

@@ -492,7 +492,7 @@ class CfC_NCP(RNN_2D):
         if self.if_lstm:
             self.lstm_cell = nn.LSTMCell(self.input_size,self.hidden_size,bias=False)
             self.c_encoder = nn.Linear(self.input_size,self.hidden_size,bias=False)
-        self.cfc = WiredCfCCell(self.input_size,self.wiring).to(device)
+        self.cfc = WiredCfCCell(self.input_size,self.wiring)
 
         self.update_optimizer()
 
@@ -516,7 +516,7 @@ class CfC_NCP(RNN_2D):
                 y_out.append(y) # (batch_size, output_size)    
         else:
             with torch.no_grad():
-                self.hts = np.zeros((t+1, b, self.hidden_size))
+                self.hts = torch.zeros((t+1, b, self.hidden_size))
                 self.hts[0] = hidden
                 for i in range(t):
                     if self.if_lstm:
@@ -526,7 +526,7 @@ class CfC_NCP(RNN_2D):
                     cell = cx
                     self.hts[i+1] = hx
                     y_out.append(y) # (batch_size, output_size)
-            
+
         self.time_steps = t
         self.batch_size = b
         # output shape (batch_size, seq_len, input_size)
