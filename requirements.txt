@@ -1,4 +1,5 @@
 numpy
+scipy
 matplotlib
 umap-learn
 scikit-learn
@@ -10,3 +11,4 @@ ipykernel
 Sophia-Optimizer
 ratinabox
 plotly
+ncps

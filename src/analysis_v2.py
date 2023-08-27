@@ -8,8 +8,6 @@ from sklearn.decomposition import PCA
 
 import sys
 sys.path.append('../src')
-from datagen import *
-from datagen2D import *
 from datagen2D_v2 import *
 
 

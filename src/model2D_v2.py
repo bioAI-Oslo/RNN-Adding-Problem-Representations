@@ -15,7 +15,6 @@ import torch.optim as optim
 from ncps.wirings import AutoNCP, FullyConnected
 from ncps.torch import LTC, LTCCell, CfCCell, WiredCfCCell
 
-import pytorch_lightning as pl
 from Sophia import SophiaG
 
 import ratinabox #IMPORT 
@@ -24,8 +23,6 @@ from ratinabox.Agent import Agent
 
 import sys
 sys.path.append('../src')
-from datagen import *
-from datagen2D import *
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")

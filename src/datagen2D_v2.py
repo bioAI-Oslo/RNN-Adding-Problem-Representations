@@ -13,8 +13,6 @@ import ratinabox #IMPORT
 from ratinabox.Environment import Environment
 from ratinabox.Agent import Agent
 
-from datagen import datagen_lowetal
-
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
