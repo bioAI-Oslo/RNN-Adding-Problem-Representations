@@ -472,12 +472,12 @@ class LSTM_2D(RNN_2D):
         if not inference:
             if not raw:
                 return torch.stack(y_out, dim=0)
-            return self.hts.permute(1,0,2)
+            return self.hts
         else:
             with torch.no_grad():
                 if not raw:
                     return torch.stack(y_out, dim=0)
-                return self.hts.permute(1,0,2)
+                return self.hts
     
 
 class CfC_NCP(RNN_2D):
