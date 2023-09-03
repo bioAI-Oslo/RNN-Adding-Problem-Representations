@@ -24,6 +24,8 @@ from ratinabox.Agent import Agent
 import sys
 sys.path.append('../src')
 
+from datagen2D_v2 import *
+
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
     print("Running on GPU: ", device)

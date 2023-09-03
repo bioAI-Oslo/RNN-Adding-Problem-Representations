@@ -146,8 +146,11 @@ class Analysis:
                 ax[k//4,k%4].set_ylabel(r"Position $y$")
             plt.show()
 
-    def plot_norm(self,avg_only=True):
-        hts = self.model.hts.norm(dim=2)
+    def plot_norm(self,avg_only=True,skip_first=False):
+        if skip_first:
+            hts = self.model.hts.norm(dim=2)[:,1:]
+        else:
+            hts = self.model.hts.norm(dim=2)
         hts = hts.cpu().detach().numpy()
         if avg_only:
             # Plot mean
@@ -217,7 +220,7 @@ class Analysis:
             out_decoded = sincos_to_2D(torch.Tensor(out))
             labels = labels.detach().cpu().numpy()
             labels_sincos = labels_sincos.detach().cpu().numpy()
-            out_decoded = out_decoded.detach().cpu().numpy()
+            out_decoded = out_decoded[:,1:,:].detach().cpu().numpy()
             out = out.detach().cpu().numpy()
             # total_mse = np.mean((labels_sincos-out)**2)
             total_mse = np.mean((labels-out_decoded)**2)
