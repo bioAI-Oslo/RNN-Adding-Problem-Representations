@@ -11,7 +11,7 @@
 
 ---
 ### Results
-![[Pasted image 20230316130611.png]]
+![Pastedimage20230316130611.png](Pastedimage20230316130611.png)
 - Accurate and robust, but not energy efficient
 
 ---
@@ -23,7 +23,7 @@
 
 ---
 ### Results
-![[Pasted image 20230323133935.png]]
+![Pastedimage20230323133935.png](Pastedimage20230323133935.png)
 - Rotation matrix: energy efficient, but neither accurate nor robust
 
 ---
@@ -36,7 +36,7 @@
 
 ---
 ### Results
-![[Pasted image 20230316164401.png]]
+![Pastedimage20230316164401.png](Pastedimage20230316164401.png)
 - Robust and accurate, but not energy efficient
 ---
 ## Fourth model: Arccos-loss
@@ -48,21 +48,21 @@
 ---
 ### Results
 
-![[Pasted image 20230620132555.png]]
+![Pastedimage20230620132555.png](Pastedimage20230620132555.png)
 - 93 % explained variance
 
 ---
-![[Pasted image 20230620132910.png]]
+![Pastedimage20230620132910.png](Pastedimage20230620132910.png)
 - x-axis: position (scaled down from 0 to 2pi, to 0 to 1), y-axis: cell activity
 
 ---
-![[Pasted image 20230620132449.png]]
+![Pastedimage20230620132449.png](Pastedimage20230620132449.png)
 
 ---
-![[Pasted image 20230620132705.png]]
+![Pastedimage20230620132705.png](Pastedimage20230620132705.png)
 
 ---
-![[Pasted image 20230620132730.png]]
+![Pastedimage20230620132730.png](Pastedimage20230620132730.png)
 
 ---
 - In other words: robust, accurate and energy efficient
@@ -71,7 +71,7 @@
 # Navigation in 2D
 
 ---
-![[Pasted image 20230809102204.png]]
+![Pastedimage20230809102204.png](Pastedimage20230809102204.png)
 
 ---
 ## Comparison model
@@ -82,10 +82,10 @@
 
 ---
 ### Result
-![[Pasted image 20230818142503.png]]
+![Pastedimage20230818142503.png](Pastedimage20230818142503.png)
 
 ---
-![[Pasted image 20230818142747.png]]
+![Pastedimage20230818142747.png](Pastedimage20230818142747.png)
 - 87 % explained variance
 
 ---
@@ -97,10 +97,10 @@
 
 ---
 ### Results
-![[Pasted image 20230622141915.png]]
+![Pastedimage20230622141915.png](Pastedimage20230622141915.png)
 
 ---
-![[Pasted image 20230622140803.png]]
+![Pastedimage20230622140803.png](Pastedimage20230622140803.png)
 
 ---
 ### Weaknesses
@@ -116,22 +116,22 @@
 
 ---
 ### Results
-![[Pasted image 20230809125658.png]]
+![Pastedimage20230809125658.png](Pastedimage20230809125658.png)
 
 ---
-![[Pasted image 20230809125754.png]]
+![Pastedimage20230809125754.png](Pastedimage20230809125754.png)
 
 ---
-![[Pasted image 20230807132838.png]]
+![Pastedimage20230807132838.png](Pastedimage20230807132838.png)
 
 ---
-![[Pasted image 20230807132853.png]]
+![Pastedimage20230807132853.png](Pastedimage20230807132853.png)
 
 ---
-![[Pasted image 20230808112822.png]]
+![Pastedimage20230808112822.png](Pastedimage20230808112822.png)
 
 ---
-![[Pasted image 20230808112900.png]]
+![Pastedimage20230808112900.png](Pastedimage20230808112900.png)
 
 ---
 ### Comments
