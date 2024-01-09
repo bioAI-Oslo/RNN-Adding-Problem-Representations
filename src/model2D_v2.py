@@ -152,11 +152,11 @@ class RNN_2D(RNN_base):
         self.if_low = if_low
         self.if_decoder = if_decoder
         if self.if_low:
-            self.output_size = 4
+            self.output_size = 2
 
         self.input = nn.Linear(self.input_size, self.hidden_size, bias=input_bias)
-        self.inputx = nn.Linear(1, self.hidden_size, bias=input_bias)
-        self.inputy = nn.Linear(1, self.hidden_size, bias=input_bias)
+        self.inputx = nn.Linear(2, self.hidden_size, bias=input_bias)
+        self.inputy = nn.Linear(2, self.hidden_size, bias=input_bias)
         self.start_encoder = nn.Linear(self.input_size, self.hidden_size, bias=rest_bias)
         self.hidden = nn.Linear(self.hidden_size, self.hidden_size, bias=h_bias)
         self.output = nn.Linear(self.hidden_size, self.output_size, bias=rest_bias)
